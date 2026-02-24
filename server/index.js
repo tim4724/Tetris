@@ -29,6 +29,13 @@ const MIME_TYPES = {
 const server = http.createServer((req, res) => {
   let urlPath = req.url.split('?')[0]; // strip query params
 
+  // Health check endpoint
+  if (urlPath === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok' }));
+    return;
+  }
+
   // Map directory paths to index.html
   if (urlPath === '/' || urlPath === '/display' || urlPath === '/display/') {
     urlPath = '/display/index.html';

@@ -1,0 +1,152 @@
+name: Preview Deploy
+
+on:
+  push:
+    branches:
+      - '**'
+
+concurrency:
+  group: preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      platforms: linux/amd64
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+  deploy:
+    runs-on: [self-hosted, k8s]
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Write kubeconfig
+        run: |
+          echo "${KUBECONFIG_B64}" | base64 -d > kubeconfig
+          echo "KUBECONFIG=$PWD/kubeconfig" >> "$GITHUB_ENV"
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+
+      - name: Deploy preview to Kubernetes
+        env:
+          BRANCH_RAW: ${{ github.ref_name }}
+          IMAGE: ${{ needs.build.outputs.sha_tag }}
+        run: |
+          set -euo pipefail
+          SAFE_BRANCH=$(echo "$BRANCH_RAW" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9-]#-#g' | cut -c1-50 | sed 's/-*$//')
+          NS="tetris-${SAFE_BRANCH}"
+          HOST="${SAFE_BRANCH}.tetris.duckdns.org"
+
+          kubectl get ns "$NS" >/dev/null 2>&1 || kubectl create ns "$NS"
+
+          TLS_CRT=$(kubectl get secret tetris-wildcard-tls -n default -o jsonpath='{.data.tls\.crt}')
+          TLS_KEY=$(kubectl get secret tetris-wildcard-tls -n default -o jsonpath='{.data.tls\.key}')
+
+          cat <<EOS | kubectl apply -n "$NS" -f -
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: tetris-wildcard-tls
+          type: kubernetes.io/tls
+          data:
+            tls.crt: ${TLS_CRT}
+            tls.key: ${TLS_KEY}
+          EOS
+
+          cat <<EOF | kubectl apply -n "$NS" -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: tetris
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: tetris
+            template:
+              metadata:
+                labels:
+                  app: tetris
+              spec:
+                containers:
+                  - name: tetris
+                    image: ${IMAGE}
+                    ports:
+                      - containerPort: 4000
+                        name: http
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: tetris
+          spec:
+            selector:
+              app: tetris
+            ports:
+              - port: 4000
+                targetPort: 4000
+          ---
+          apiVersion: traefik.io/v1alpha1
+          kind: Middleware
+          metadata:
+            name: redirect-to-https
+          spec:
+            redirectScheme:
+              scheme: https
+              permanent: true
+          ---
+          apiVersion: traefik.io/v1alpha1
+          kind: IngressRoute
+          metadata:
+            name: tetris-https
+          spec:
+            entryPoints:
+              - websecure
+            routes:
+              - match: Host(\`${HOST}\`)
+                kind: Rule
+                services:
+                  - name: tetris
+                    port: 4000
+            tls:
+              secretName: tetris-wildcard-tls
+          ---
+          apiVersion: traefik.io/v1alpha1
+          kind: IngressRoute
+          metadata:
+            name: tetris-http
+          spec:
+            entryPoints:
+              - web
+            routes:
+              - match: Host(\`${HOST}\`)
+                kind: Rule
+                services:
+                  - name: tetris
+                    port: 4000
+                middlewares:
+                  - name: redirect-to-https
+          EOF
+
+      - name: Publish preview URL
+        env:
+          BRANCH_RAW: ${{ github.ref_name }}
+        run: |
+          SAFE_BRANCH=$(echo "$BRANCH_RAW" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9-]#-#g' | cut -c1-50 | sed 's/-*$//')
+          HOST="${SAFE_BRANCH}.tetris.duckdns.org"
+          {
+            echo "### Preview"
+            echo "- URL: https://${HOST}"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -4,7 +4,8 @@
   "description": "Browser-based multiplayer Tetris with phone controllers",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "qrcode": "^1.5.4",
