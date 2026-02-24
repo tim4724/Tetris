@@ -47,18 +47,18 @@ jobs:
           set -euo pipefail
           SAFE_BRANCH=$(echo "$BRANCH_RAW" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9-]#-#g' | cut -c1-50 | sed 's/-*$//')
           NS="tetris-${SAFE_BRANCH}"
-          HOST="${SAFE_BRANCH}.tetris.duckdns.org"
+          HOST="${SAFE_BRANCH}.tetris-party.duckdns.org"
 
           kubectl get ns "$NS" >/dev/null 2>&1 || kubectl create ns "$NS"
 
-          TLS_CRT=$(kubectl get secret tetris-wildcard-tls -n default -o jsonpath='{.data.tls\.crt}')
-          TLS_KEY=$(kubectl get secret tetris-wildcard-tls -n default -o jsonpath='{.data.tls\.key}')
+          TLS_CRT=$(kubectl get secret tetris-party-wildcard-tls -n default -o jsonpath='{.data.tls\.crt}')
+          TLS_KEY=$(kubectl get secret tetris-party-wildcard-tls -n default -o jsonpath='{.data.tls\.key}')
 
           cat <<EOS | kubectl apply -n "$NS" -f -
           apiVersion: v1
           kind: Secret
           metadata:
-            name: tetris-wildcard-tls
+            name: tetris-party-wildcard-tls
           type: kubernetes.io/tls
           data:
             tls.crt: ${TLS_CRT}
@@ -121,7 +121,7 @@ jobs:
                   - name: tetris
                     port: 4000
             tls:
-              secretName: tetris-wildcard-tls
+              secretName: tetris-party-wildcard-tls
           ---
           apiVersion: traefik.io/v1alpha1
           kind: IngressRoute
@@ -145,7 +145,7 @@ jobs:
           BRANCH_RAW: ${{ github.ref_name }}
         run: |
           SAFE_BRANCH=$(echo "$BRANCH_RAW" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9-]#-#g' | cut -c1-50 | sed 's/-*$//')
-          HOST="${SAFE_BRANCH}.tetris.duckdns.org"
+          HOST="${SAFE_BRANCH}.tetris-party.duckdns.org"
           {
             echo "### Preview"
             echo "- URL: https://${HOST}"
