@@ -210,8 +210,8 @@ function onCountdown(msg) {
   countdownOverlay.offsetHeight; // force reflow
   countdownOverlay.style.animation = '';
 
-  if (msg.value === 0 || msg.value === 'GO') {
-    if (music) music.start();
+  if (msg.value === 'GO') {
+    if (music && !music.playing) music.start();
     setTimeout(() => {
       countdownOverlay.classList.add('hidden');
       countdownOverlay.textContent = '';

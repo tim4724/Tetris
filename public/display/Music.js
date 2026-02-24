@@ -69,7 +69,7 @@ class Music {
 
   init() {
     if (this.ctx) return;
-    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.ctx = new AudioContext();
 
     this.masterGain = this.ctx.createGain();
     this.masterGain.gain.value = 0.3;
@@ -100,6 +100,7 @@ class Music {
     this.playing = true;
     this.melodyIndex = 0;
     this.bassIndex = 0;
+    this.scheduledSources = [];
     this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
     this.masterGain.gain.setValueAtTime(0.3, this.ctx.currentTime);
     this.nextMelodyTime = this.ctx.currentTime + 0.1;
@@ -177,9 +178,10 @@ class Music {
     osc.frequency.value = freq;
 
     // Envelope: quick attack, sustain, then release to avoid clicks
+    const release = Math.min(0.02, duration * 0.2);
     noteGain.gain.setValueAtTime(0.001, time);
     noteGain.gain.linearRampToValueAtTime(1, time + 0.01);
-    noteGain.gain.setValueAtTime(1, time + duration - 0.02);
+    noteGain.gain.setValueAtTime(1, time + duration - release);
     noteGain.gain.exponentialRampToValueAtTime(0.001, time + duration);
 
     osc.connect(noteGain);
