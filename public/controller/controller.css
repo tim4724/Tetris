@@ -1,0 +1,188 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  position: fixed;
+  background: #0a0a1a;
+  color: white;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Waiting screen */
+#waiting-screen {
+  gap: 12px;
+}
+
+#status-text {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+#status-detail {
+  font-size: 16px;
+  color: #888;
+}
+
+/* Game screen */
+#game-screen {
+  justify-content: stretch;
+  padding: 0;
+}
+
+#status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 40px;
+  padding: 0 16px;
+  padding-top: env(safe-area-inset-top);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+#player-name {
+  font-weight: 600;
+}
+
+#player-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #888;
+  flex-shrink: 0;
+}
+
+#score-display {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+#touch-area {
+  flex: 1;
+  width: 100%;
+  background: #0e0e24;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#touch-hint {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 16px;
+  line-height: 2;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+#touch-hint.fade-out {
+  opacity: 0;
+}
+
+#garbage-bar {
+  width: 100%;
+  height: 6px;
+  flex-shrink: 0;
+  background: #1a1a2e;
+  display: flex;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.garbage-segment {
+  height: 100%;
+  background: #ff4444;
+  flex-shrink: 0;
+}
+
+/* Game over screen */
+#gameover-screen {
+  gap: 16px;
+}
+
+#rank-display {
+  font-size: 64px;
+  font-weight: 800;
+}
+
+#stats-display {
+  font-size: 18px;
+  line-height: 1.8;
+  text-align: center;
+  color: #ccc;
+}
+
+#gameover-screen > p {
+  font-size: 16px;
+  color: #666;
+  margin-top: 24px;
+}
+
+/* Countdown overlay */
+#game-screen .countdown-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 96px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+  z-index: 10;
+  animation: countdownPulse 0.5s ease-out;
+}
+
+#game-screen .countdown-overlay.go {
+  color: #4ecdc4;
+  font-size: 72px;
+  animation: countdownPulse 0.4s ease-out;
+}
+
+@keyframes countdownPulse {
+  0% { transform: scale(1.4); opacity: 0.3; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Dead state */
+#game-screen.dead #touch-area {
+  opacity: 0.4;
+}
+
+#game-screen.dead #status-bar {
+  opacity: 0.5;
+}

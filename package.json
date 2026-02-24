@@ -1,0 +1,13 @@
+{
+  "name": "multiplayer-tetris",
+  "version": "1.0.0",
+  "description": "Browser-based multiplayer Tetris with phone controllers",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.0"
+  }
+}

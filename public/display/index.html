@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tetris - Display</title>
+  <link rel="stylesheet" href="display.css">
+</head>
+<body>
+  <!-- Lobby screen: QR code + player list + start button -->
+  <div id="lobby-screen" class="screen">
+    <h1>TETRIS</h1>
+    <div id="qr-container">
+      <img id="qr-code" alt="Scan to join">
+      <p id="room-code"></p>
+      <p id="join-url"></p>
+    </div>
+    <div id="player-list"></div>
+    <div id="mode-select">
+      <button class="mode-btn active" data-mode="competitive">Competitive</button>
+      <button class="mode-btn" data-mode="race">Race (40 lines)</button>
+    </div>
+    <button id="start-btn" disabled>Waiting for players...</button>
+  </div>
+
+  <!-- Game screen: canvas boards -->
+  <div id="game-screen" class="screen hidden">
+    <canvas id="game-canvas"></canvas>
+    <div id="countdown-overlay" class="hidden"></div>
+  </div>
+
+  <!-- Results screen -->
+  <div id="results-screen" class="screen hidden">
+    <h1>RESULTS</h1>
+    <div id="results-list"></div>
+    <button id="lobby-btn">Back to Lobby</button>
+  </div>
+
+  <script src="../shared/protocol.js"></script>
+  <script src="../shared/colors.js"></script>
+  <script src="BoardRenderer.js"></script>
+  <script src="UIRenderer.js"></script>
+  <script src="Animations.js"></script>
+  <script src="display.js"></script>
+</body>
+</html>

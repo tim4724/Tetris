@@ -1,0 +1,421 @@
+'use strict';
+
+const {
+  BOARD_WIDTH, BOARD_HEIGHT, VISIBLE_HEIGHT, BUFFER_ROWS,
+  GRAVITY_TABLE, SOFT_DROP_MULTIPLIER,
+  LOCK_DELAY_MS, MAX_LOCK_RESETS, GARBAGE_CELL
+} = require('./constants');
+const { Piece } = require('./Piece');
+const { Randomizer } = require('./Randomizer');
+const { Scoring } = require('./Scoring');
+
+const NEXT_QUEUE_SIZE = 6;
+
+class PlayerBoard {
+  constructor(playerId) {
+    this.playerId = playerId;
+    // 10 wide x 24 tall grid (0=empty, 1-7=piece type, 8=garbage)
+    this.grid = Array.from({ length: BOARD_HEIGHT }, () => new Array(BOARD_WIDTH).fill(0));
+    this.currentPiece = null;
+    this.holdPiece = null;
+    this.holdUsed = false;
+    this.nextPieces = [];
+    this.scoring = new Scoring();
+    this.randomizer = new Randomizer();
+    this.alive = true;
+    this.lockTimer = null;
+    this.lockResets = 0;
+    this.gravityCounter = 0;
+    this.softDropping = false;
+    this.pendingGarbage = [];
+    this.lastWasTSpin = false;
+    this.lastWasTSpinMini = false;
+    this.lastWasRotation = false;
+
+    // Fill the next queue
+    this._fillNextQueue();
+  }
+
+  _fillNextQueue() {
+    while (this.nextPieces.length < NEXT_QUEUE_SIZE + 1) {
+      this.nextPieces.push(this.randomizer.next());
+    }
+  }
+
+  spawnPiece() {
+    this._fillNextQueue();
+    const type = this.nextPieces.shift();
+    this.currentPiece = new Piece(type);
+    this.holdUsed = false;
+    this.lockTimer = null;
+    this.lockResets = 0;
+    this.lastWasRotation = false;
+
+    // Check if spawn position is valid
+    if (!this.isValidPosition(this.currentPiece)) {
+      this.alive = false;
+      return false;
+    }
+    return true;
+  }
+
+  moveLeft() {
+    if (!this.currentPiece || !this.alive) return false;
+    const test = this.currentPiece.clone();
+    test.x -= 1;
+    if (this.isValidPosition(test)) {
+      this.currentPiece.x = test.x;
+      this.lastWasRotation = false;
+      this._resetLockTimerIfOnSurface();
+      return true;
+    }
+    return false;
+  }
+
+  moveRight() {
+    if (!this.currentPiece || !this.alive) return false;
+    const test = this.currentPiece.clone();
+    test.x += 1;
+    if (this.isValidPosition(test)) {
+      this.currentPiece.x = test.x;
+      this.lastWasRotation = false;
+      this._resetLockTimerIfOnSurface();
+      return true;
+    }
+    return false;
+  }
+
+  rotateCW() {
+    if (!this.currentPiece || !this.alive) return false;
+    if (this.currentPiece.type === 'O') return false;
+
+    const fromRotation = this.currentPiece.rotation;
+    const toRotation = (fromRotation + 1) % 4;
+    const kicks = this.currentPiece.getWallKicks(fromRotation, toRotation);
+
+    for (const [dx, dy] of kicks) {
+      const test = this.currentPiece.clone();
+      test.rotation = toRotation;
+      test.x += dx;
+      test.y -= dy; // SRS uses y-up, our grid is y-down
+      if (this.isValidPosition(test)) {
+        this.currentPiece.rotation = toRotation;
+        this.currentPiece.x = test.x;
+        this.currentPiece.y = test.y;
+        this.lastWasRotation = true;
+        this._checkTSpin();
+        this._resetLockTimerIfOnSurface();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  _checkTSpin() {
+    this.lastWasTSpin = false;
+    this.lastWasTSpinMini = false;
+
+    if (this.currentPiece.type !== 'T') return;
+
+    // T-spin: check 4 corners around center of T piece
+    // Center of T piece in its local grid is at (1,1)
+    const cx = this.currentPiece.x + 1;
+    const cy = this.currentPiece.y + 1;
+
+    const corners = [
+      [cx - 1, cy - 1],
+      [cx + 1, cy - 1],
+      [cx - 1, cy + 1],
+      [cx + 1, cy + 1]
+    ];
+
+    let filledCorners = 0;
+    for (const [col, row] of corners) {
+      if (col < 0 || col >= BOARD_WIDTH || row < 0 || row >= BOARD_HEIGHT || this.grid[row][col] !== 0) {
+        filledCorners++;
+      }
+    }
+
+    if (filledCorners >= 3) {
+      // Check front corners to determine mini vs full
+      // Front corners depend on rotation state
+      const rotation = this.currentPiece.rotation;
+      let frontCorners;
+      switch (rotation) {
+        case 0: frontCorners = [[cx - 1, cy - 1], [cx + 1, cy - 1]]; break;
+        case 1: frontCorners = [[cx + 1, cy - 1], [cx + 1, cy + 1]]; break;
+        case 2: frontCorners = [[cx + 1, cy + 1], [cx - 1, cy + 1]]; break;
+        case 3: frontCorners = [[cx - 1, cy + 1], [cx - 1, cy - 1]]; break;
+      }
+
+      let frontFilled = 0;
+      for (const [col, row] of frontCorners) {
+        if (col < 0 || col >= BOARD_WIDTH || row < 0 || row >= BOARD_HEIGHT || this.grid[row][col] !== 0) {
+          frontFilled++;
+        }
+      }
+
+      if (frontFilled === 2) {
+        this.lastWasTSpin = true;
+      } else {
+        this.lastWasTSpinMini = true;
+      }
+    }
+  }
+
+  _resetLockTimerIfOnSurface() {
+    if (!this.currentPiece) return;
+    if (this._isOnSurface()) {
+      if (this.lockResets < MAX_LOCK_RESETS) {
+        this.lockTimer = Date.now();
+        this.lockResets++;
+      }
+    }
+  }
+
+  _isOnSurface() {
+    if (!this.currentPiece) return false;
+    const test = this.currentPiece.clone();
+    test.y += 1;
+    return !this.isValidPosition(test);
+  }
+
+  softDropStart() {
+    this.softDropping = true;
+  }
+
+  softDropEnd() {
+    this.softDropping = false;
+  }
+
+  hardDrop() {
+    if (!this.currentPiece || !this.alive) return null;
+    let cellsDropped = 0;
+    while (true) {
+      const test = this.currentPiece.clone();
+      test.y += 1;
+      if (this.isValidPosition(test)) {
+        this.currentPiece.y = test.y;
+        cellsDropped++;
+      } else {
+        break;
+      }
+    }
+    this.scoring.addHardDrop(cellsDropped);
+    return this._lockAndProcess();
+  }
+
+  hold() {
+    if (!this.currentPiece || !this.alive || this.holdUsed) return false;
+    const currentType = this.currentPiece.type;
+
+    if (this.holdPiece) {
+      this.currentPiece = new Piece(this.holdPiece);
+      this.holdPiece = currentType;
+    } else {
+      this.holdPiece = currentType;
+      this._fillNextQueue();
+      const nextType = this.nextPieces.shift();
+      this.currentPiece = new Piece(nextType);
+    }
+
+    this.holdUsed = true;
+    this.lockTimer = null;
+    this.lockResets = 0;
+    this.lastWasRotation = false;
+
+    if (!this.isValidPosition(this.currentPiece)) {
+      this.alive = false;
+      return false;
+    }
+    return true;
+  }
+
+  tick(deltaMs) {
+    if (!this.alive || !this.currentPiece) return null;
+
+    const level = this.scoring.getLevel();
+    const gravityIndex = Math.min(level - 1, GRAVITY_TABLE.length - 1);
+    let gravityFrames = GRAVITY_TABLE[gravityIndex];
+
+    // Soft drop accelerates gravity
+    if (this.softDropping) {
+      gravityFrames = Math.max(1, Math.floor(gravityFrames / SOFT_DROP_MULTIPLIER));
+    }
+
+    // Convert deltaMs to frames (60fps)
+    const frames = deltaMs / (1000 / 60);
+    this.gravityCounter += frames;
+
+    // Apply gravity
+    let softDropCells = 0;
+    while (this.gravityCounter >= gravityFrames) {
+      this.gravityCounter -= gravityFrames;
+      const test = this.currentPiece.clone();
+      test.y += 1;
+      if (this.isValidPosition(test)) {
+        this.currentPiece.y = test.y;
+        if (this.softDropping) {
+          softDropCells++;
+        }
+        // Reset lock timer when piece moves down
+        if (this._isOnSurface()) {
+          if (this.lockTimer === null) {
+            this.lockTimer = Date.now();
+          }
+        } else {
+          this.lockTimer = null;
+        }
+      } else {
+        // Can't drop further, start lock timer if not already
+        if (this.lockTimer === null) {
+          this.lockTimer = Date.now();
+        }
+        this.gravityCounter = 0;
+        break;
+      }
+    }
+
+    if (softDropCells > 0) {
+      this.scoring.addSoftDrop(softDropCells);
+    }
+
+    // Check lock timer
+    if (this.lockTimer !== null && (Date.now() - this.lockTimer) >= LOCK_DELAY_MS) {
+      return this._lockAndProcess();
+    }
+
+    return null;
+  }
+
+  _lockAndProcess() {
+    this.lockPiece();
+    const clearResult = this.clearLines();
+    this._applyPendingGarbage();
+    const spawnOk = this.spawnPiece();
+
+    return {
+      linesCleared: clearResult.linesCleared,
+      isTSpin: clearResult.isTSpin,
+      isTSpinMini: clearResult.isTSpinMini,
+      scoreResult: clearResult.scoreResult,
+      alive: this.alive
+    };
+  }
+
+  lockPiece() {
+    if (!this.currentPiece) return;
+    const blocks = this.currentPiece.getAbsoluteBlocks();
+    for (const [col, row] of blocks) {
+      if (row >= 0 && row < BOARD_HEIGHT && col >= 0 && col < BOARD_WIDTH) {
+        this.grid[row][col] = this.currentPiece.typeId;
+      }
+    }
+  }
+
+  clearLines() {
+    const isTSpin = this.lastWasTSpin && this.lastWasRotation;
+    const isTSpinMini = this.lastWasTSpinMini && this.lastWasRotation;
+
+    // Find full rows
+    const fullRows = [];
+    for (let row = 0; row < BOARD_HEIGHT; row++) {
+      if (this.grid[row].every(cell => cell !== 0)) {
+        fullRows.push(row);
+      }
+    }
+
+    const linesCleared = fullRows.length;
+
+    if (linesCleared > 0) {
+      // Remove full rows from top to bottom
+      for (let i = fullRows.length - 1; i >= 0; i--) {
+        this.grid.splice(fullRows[i], 1);
+      }
+      // Add empty rows at top
+      for (let i = 0; i < linesCleared; i++) {
+        this.grid.unshift(new Array(BOARD_WIDTH).fill(0));
+      }
+    }
+
+    // Calculate score
+    const scoreResult = this.scoring.addLineClear(linesCleared, isTSpin, isTSpinMini);
+
+    // Reset combo if no lines cleared
+    if (linesCleared === 0) {
+      this.scoring.combo = -1;
+    }
+
+    return { linesCleared, isTSpin, isTSpinMini, scoreResult };
+  }
+
+  applyGarbage(lines, gapColumn) {
+    // Remove rows from top to make room
+    this.grid.splice(0, lines);
+    // Add garbage rows at bottom
+    for (let i = 0; i < lines; i++) {
+      const row = new Array(BOARD_WIDTH).fill(GARBAGE_CELL);
+      row[gapColumn] = 0;
+      this.grid.push(row);
+    }
+  }
+
+  addPendingGarbage(lines, gapColumn) {
+    this.pendingGarbage.push({ lines, gapColumn });
+  }
+
+  _applyPendingGarbage() {
+    for (const { lines, gapColumn } of this.pendingGarbage) {
+      this.applyGarbage(lines, gapColumn);
+    }
+    this.pendingGarbage = [];
+  }
+
+  getGhostY() {
+    if (!this.currentPiece) return 0;
+    const test = this.currentPiece.clone();
+    while (true) {
+      test.y += 1;
+      if (!this.isValidPosition(test)) {
+        return test.y - 1;
+      }
+    }
+  }
+
+  isValidPosition(piece) {
+    const blocks = piece.getAbsoluteBlocks();
+    for (const [col, row] of blocks) {
+      if (col < 0 || col >= BOARD_WIDTH) return false;
+      if (row < 0 || row >= BOARD_HEIGHT) return false;
+      if (this.grid[row][col] !== 0) return false;
+    }
+    return true;
+  }
+
+  getState() {
+    // Return only visible rows (bottom 20 of the 24-row grid)
+    const visibleGrid = this.grid.slice(BUFFER_ROWS);
+
+    return {
+      grid: visibleGrid,
+      currentPiece: this.currentPiece ? {
+        type: this.currentPiece.type,
+        typeId: this.currentPiece.typeId,
+        rotation: this.currentPiece.rotation,
+        x: this.currentPiece.x,
+        y: this.currentPiece.y - BUFFER_ROWS,
+        blocks: this.currentPiece.getBlocks()
+      } : null,
+      ghostY: this.currentPiece ? this.getGhostY() - BUFFER_ROWS : null,
+      holdPiece: this.holdPiece,
+      nextPieces: this.nextPieces.slice(0, 5),
+      score: this.scoring.score,
+      level: this.scoring.level,
+      lines: this.scoring.lines,
+      alive: this.alive,
+      pendingGarbage: this.pendingGarbage.reduce((sum, g) => sum + g.lines, 0)
+    };
+  }
+}
+
+module.exports = { PlayerBoard };
