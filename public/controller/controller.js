@@ -48,6 +48,25 @@
 
   statusDetail.textContent = 'Room: ' + roomCode;
 
+  function vibrate(pattern) {
+    if (!navigator.vibrate) return;
+    try {
+      navigator.vibrate(pattern);
+    } catch (_) {
+      // Ignore vibration errors on unsupported browsers/devices.
+    }
+  }
+
+  // Prime the Vibration API on the very first user touch.  Mobile browsers
+  // require navigator.vibrate() to be called inside a user-gesture event
+  // handler before it will produce output.  A tiny 1 ms vibration during the
+  // waiting/countdown screen is imperceptible but unlocks the API so that
+  // haptic feedback works immediately once the game starts.
+  document.addEventListener('touchstart', function primeVibration() {
+    vibrate(1);
+    document.removeEventListener('touchstart', primeVibration);
+  }, { passive: true });
+
   // WebSocket connection
   function connect() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -55,6 +74,8 @@
 
     ws.onopen = function () {
       reconnectAttempts = 0;
+      // Best-effort "connected" haptic feedback.
+      vibrate(10);
       const token = sessionStorage.getItem('reconnectToken_' + roomCode);
       if (token) {
         send(MSG.REJOIN, { roomCode: roomCode, reconnectToken: token });
@@ -153,6 +174,8 @@
   }
 
   function onGameStart() {
+    // Best-effort start signal for mobile controllers.
+    vibrate([15, 25, 20]);
     inputSeq = 0;
     scoreDisplay.textContent = '0';
     garbageBar.innerHTML = '';

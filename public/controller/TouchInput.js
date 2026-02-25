@@ -33,9 +33,6 @@ class TouchInput {
     this.posBuffer = [];
     this.POS_BUFFER_SIZE = 4;
 
-    // Haptic API warmup flag - first touch initializes vibration
-    this._hapticInitialized = false;
-
     // Bind event handlers
     this._onTouchStart = this._onTouchStart.bind(this);
     this._onTouchMove = this._onTouchMove.bind(this);
@@ -84,9 +81,8 @@ class TouchInput {
   }
 
   _haptic(pattern) {
-    if (navigator.vibrate) {
-      navigator.vibrate(pattern);
-    }
+    if (!navigator.vibrate) return;
+    navigator.vibrate(pattern);
   }
 
   _calcSoftDropSpeed(distY) {
@@ -97,14 +93,6 @@ class TouchInput {
 
   _onTouchStart(e) {
     e.preventDefault();
-
-    // Warm up haptic API on first touch (some browsers need user gesture activation)
-    if (!this._hapticInitialized) {
-      this._hapticInitialized = true;
-      if (navigator.vibrate) {
-        navigator.vibrate(1);
-      }
-    }
 
     // Only track first touch
     if (this.activeId !== null) return;
