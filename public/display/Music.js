@@ -13,6 +13,7 @@ class Music {
     this.scheduleTimer = null;
     this.melodyGain = null;
     this.bassGain = null;
+    this.octaveGain = null;
     this.masterGain = null;
     this.generation = 0;
     this.passCount = 0;
@@ -20,11 +21,11 @@ class Music {
     // Note frequencies (Hz). Sharps use 's' suffix (e.g. Gs2 = G#2)
     const E2 = 82.41, Gs2 = 103.83, A2 = 110.00;
     const C3 = 130.81, D3 = 146.83, E3 = 164.81, F3 = 174.61, Gs3 = 207.65, A3 = 220.00;
-    const Gs4 = 415.30, A4 = 440.00, B4 = 493.88, C5 = 523.25, D5 = 587.33, E5 = 659.25, F5 = 698.46, G5 = 783.99, A5 = 880.00;
+    const A4 = 440.00, B4 = 493.88, C5 = 523.25, D5 = 587.33, E5 = 659.25, F5 = 698.46, G5 = 783.99, A5 = 880.00;
     const R = 0; // rest
 
-    // Theme A — Korobeiniki verse (8 measures)
-    this.melodyA = [
+    // Korobeiniki Theme A — two phrases, 8 measures total
+    this.melody = [
       // Phrase 1
       [E5, 2], [B4, 1], [C5, 1], [D5, 2], [C5, 1], [B4, 1],
       [A4, 2], [A4, 1], [C5, 1], [E5, 2], [D5, 1], [C5, 1],
@@ -37,7 +38,7 @@ class Music {
       [C5, 2], [A4, 2], [A4, 2], [R, 2],
     ];
 
-    this.bassA = [
+    this.bass = [
       [E2, 2], [E3, 2], [E2, 2], [E3, 2],
       [A2, 2], [A3, 2], [A2, 2], [A3, 2],
       [Gs2, 2], [Gs3, 2], [E2, 2], [E3, 2],
@@ -47,50 +48,6 @@ class Music {
       [Gs2, 2], [Gs3, 2], [E2, 2], [E3, 2],
       [A2, 2], [A3, 2], [A2, 2], [R, 2],
     ];
-
-    // Theme B — Korobeiniki chorus (8 measures)
-    // Descending dotted-quarter pattern: E-C-D-B | C-A-G#-B
-    this.melodyB = [
-      // m1: E5(q.) C5(8) D5(q.) B4(8)
-      [E5, 3], [C5, 1], [D5, 3], [B4, 1],
-      // m2: C5(q.) A4(8) Gs4(q) B4(q)
-      [C5, 3], [A4, 1], [Gs4, 2], [B4, 2],
-      // m3: E5(q.) C5(8) D5(q.) B4(8)
-      [E5, 3], [C5, 1], [D5, 3], [B4, 1],
-      // m4: C5(q) E5(q) A4(h)
-      [C5, 2], [E5, 2], [A4, 4],
-      // m5: E5(q.) C5(8) D5(q.) B4(8)
-      [E5, 3], [C5, 1], [D5, 3], [B4, 1],
-      // m6: C5(q.) A4(8) Gs4(q) B4(q)
-      [C5, 3], [A4, 1], [Gs4, 2], [B4, 2],
-      // m7: E5(q.) C5(8) D5(q.) B4(8)
-      [E5, 3], [C5, 1], [D5, 3], [B4, 1],
-      // m8: C5(q) A4(q) A4(q) rest(q)
-      [C5, 2], [A4, 2], [A4, 2], [R, 2],
-    ];
-
-    this.bassB = [
-      // m1: Am
-      [A2, 2], [A3, 2], [A2, 2], [A3, 2],
-      // m2: E (supports G#4 in melody)
-      [E2, 2], [E3, 2], [E2, 2], [E3, 2],
-      // m3: Am
-      [A2, 2], [A3, 2], [A2, 2], [A3, 2],
-      // m4: Am -> E
-      [A2, 2], [A3, 2], [E2, 2], [E3, 2],
-      // m5: Am
-      [A2, 2], [A3, 2], [A2, 2], [A3, 2],
-      // m6: E
-      [E2, 2], [E3, 2], [E2, 2], [E3, 2],
-      // m7: Am
-      [A2, 2], [A3, 2], [A2, 2], [A3, 2],
-      // m8: Am
-      [A2, 2], [A3, 2], [A2, 2], [R, 2],
-    ];
-
-    // Full sequence: A-B-A-B (~51s at 150 BPM)
-    this.fullMelody = [...this.melodyA, ...this.melodyB, ...this.melodyA, ...this.melodyB];
-    this.fullBass = [...this.bassA, ...this.bassB, ...this.bassA, ...this.bassB];
   }
 
   init() {
@@ -108,6 +65,11 @@ class Music {
     this.bassGain = this.ctx.createGain();
     this.bassGain.gain.value = 0;
     this.bassGain.connect(this.masterGain);
+
+    // Octave doubling voice — melody played one octave lower
+    this.octaveGain = this.ctx.createGain();
+    this.octaveGain.gain.value = 0;
+    this.octaveGain.connect(this.masterGain);
   }
 
   start() {
@@ -131,9 +93,11 @@ class Music {
     this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
     this.masterGain.gain.setValueAtTime(0.3, this.ctx.currentTime);
 
-    // Start bass silent — fades in on later passes
+    // Start bass and octave doubling silent — they fade in on later passes
     this.bassGain.gain.cancelScheduledValues(this.ctx.currentTime);
     this.bassGain.gain.setValueAtTime(0, this.ctx.currentTime);
+    this.octaveGain.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.octaveGain.gain.setValueAtTime(0, this.ctx.currentTime);
 
     this.nextMelodyTime = this.ctx.currentTime + 0.1;
     this.nextBassTime = this.ctx.currentTime + 0.1;
@@ -172,25 +136,31 @@ class Music {
 
     const eighthDuration = 60 / this.bpm / 2;
     const lookahead = 0.2;
-    const fullMelodyLen = this.fullMelody.length;
-    const fullBassLen = this.fullBass.length;
+    const melodyLen = this.melody.length;
+    const bassLen = this.bass.length;
+    const gate = this.getGateLength();
 
     // Schedule melody
     while (this.nextMelodyTime < this.ctx.currentTime + lookahead) {
       // Check for pass boundary
-      if (this.melodyIndex > 0 && this.melodyIndex % fullMelodyLen === 0) {
+      if (this.melodyIndex > 0 && this.melodyIndex % melodyLen === 0) {
         this.passCount++;
         this.updateArrangement();
       }
 
-      const idx = this.melodyIndex % fullMelodyLen;
-      const [freq, eighths] = this.fullMelody[idx];
+      const idx = this.melodyIndex % melodyLen;
+      const [freq, eighths] = this.melody[idx];
       const duration = eighths * eighthDuration;
 
       if (freq > 0) {
         const waveform = this.getMelodyWaveform();
         const detune = this.getDetuneAmount();
-        this._playOsc(freq, this.nextMelodyTime, duration * 0.9, this.melodyGain, waveform, detune);
+        this._playOsc(freq, this.nextMelodyTime, duration * gate, this.melodyGain, waveform, detune);
+
+        // Octave doubling: play melody one octave lower
+        if (this.passCount >= 5) {
+          this._playOsc(freq / 2, this.nextMelodyTime, duration * gate, this.octaveGain, waveform, 0);
+        }
       }
 
       this.nextMelodyTime += duration;
@@ -199,12 +169,13 @@ class Music {
 
     // Schedule bass
     while (this.nextBassTime < this.ctx.currentTime + lookahead) {
-      const idx = this.bassIndex % fullBassLen;
-      const [freq, eighths] = this.fullBass[idx];
+      const idx = this.bassIndex % bassLen;
+      const [freq, eighths] = this.bass[idx];
       const duration = eighths * eighthDuration;
 
       if (freq > 0) {
-        this._playOsc(freq, this.nextBassTime, duration * 0.85, this.bassGain, 'triangle', 0);
+        const bassWaveform = this.getBassWaveform();
+        this._playOsc(freq, this.nextBassTime, duration * 0.85, this.bassGain, bassWaveform, 0);
       }
 
       this.nextBassTime += duration;
@@ -275,25 +246,49 @@ class Music {
 
   updateArrangement() {
     const now = this.ctx.currentTime;
+    const fadeTime = 2;
 
     if (this.passCount === 1) {
       // Pass 1: fade in bass
       this.bassGain.gain.cancelScheduledValues(now);
       this.bassGain.gain.setValueAtTime(this.bassGain.gain.value, now);
-      this.bassGain.gain.linearRampToValueAtTime(0.35, now + 2);
+      this.bassGain.gain.linearRampToValueAtTime(0.35, now + fadeTime);
+    } else if (this.passCount === 5) {
+      // Pass 5: fade in octave doubling
+      this.octaveGain.gain.cancelScheduledValues(now);
+      this.octaveGain.gain.setValueAtTime(this.octaveGain.gain.value, now);
+      this.octaveGain.gain.linearRampToValueAtTime(0.25, now + fadeTime);
     }
-    // Pass 2+: timbre changes handled by getMelodyWaveform/getDetuneAmount
   }
 
+  // --- Variation parameters with different cycle lengths ---
+  // Using coprime-ish periods (2, 3, 4) so combinations don't repeat
+  // for 12 passes (~2:34), creating emergent variety.
+
   getMelodyWaveform() {
-    // Alternate every 2 passes: square (0-1), sawtooth (2-3), square (4-5), ...
-    const cycle = Math.floor(this.passCount / 2) % 2;
-    return cycle === 0 ? 'square' : 'sawtooth';
+    // 3-way cycle, changes every 2 passes: square → sawtooth → triangle
+    const cycle = Math.floor(this.passCount / 2) % 3;
+    return ['square', 'sawtooth', 'triangle'][cycle];
+  }
+
+  getBassWaveform() {
+    // 3-way cycle, changes every 3 passes: triangle → square → sawtooth
+    const cycle = Math.floor(this.passCount / 3) % 3;
+    return ['triangle', 'square', 'sawtooth'][cycle];
   }
 
   getDetuneAmount() {
-    // Chorus detuning activates at pass 3+
-    return this.passCount >= 3 ? 3 : 0;
+    // Gradual widening: silent → subtle → moderate → wide
+    if (this.passCount < 2) return 0;
+    if (this.passCount < 4) return 3;
+    if (this.passCount < 7) return 5;
+    return 8;
+  }
+
+  getGateLength() {
+    // Alternates every 4 passes: legato ↔ staccato
+    const cycle = Math.floor(this.passCount / 4) % 2;
+    return cycle === 0 ? 0.9 : 0.75;
   }
 
   setSpeed(level) {
