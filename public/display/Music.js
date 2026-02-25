@@ -154,12 +154,11 @@ class Music {
 
       if (freq > 0) {
         const waveform = this.getMelodyWaveform();
-        const detune = this.getDetuneAmount();
-        this._playOsc(freq, this.nextMelodyTime, duration * gate, this.melodyGain, waveform, detune);
+        this._playOsc(freq, this.nextMelodyTime, duration * gate, this.melodyGain, waveform, 0);
 
         // Octave doubling: play melody one octave lower
         if (this.passCount >= 5) {
-          this._playOsc(freq / 2, this.nextMelodyTime, duration * gate, this.octaveGain, waveform, 0);
+          this._playOsc(freq / 2, this.nextMelodyTime, duration * gate, this.octaveGain, waveform);
         }
       }
 
@@ -175,7 +174,7 @@ class Music {
 
       if (freq > 0) {
         const bassWaveform = this.getBassWaveform();
-        this._playOsc(freq, this.nextBassTime, duration * 0.85, this.bassGain, bassWaveform, 0);
+        this._playOsc(freq, this.nextBassTime, duration * 0.85, this.bassGain, bassWaveform);
       }
 
       this.nextBassTime += duration;
@@ -185,7 +184,7 @@ class Music {
     this.scheduleTimer = setTimeout(() => this.schedule(), 50);
   }
 
-  _playOsc(freq, time, duration, gainNode, type, detuneCents) {
+  _playOsc(freq, time, duration, gainNode, type) {
     const osc = this.ctx.createOscillator();
     const noteGain = this.ctx.createGain();
 
@@ -210,38 +209,10 @@ class Music {
       const idx = this.scheduledSources.indexOf(osc);
       if (idx > -1) this.scheduledSources.splice(idx, 1);
     };
-
-    // Chorus detuning: add a second slightly detuned oscillator
-    if (detuneCents > 0) {
-      const osc2 = this.ctx.createOscillator();
-      const noteGain2 = this.ctx.createGain();
-
-      osc2.type = type;
-      osc2.frequency.value = freq;
-      osc2.detune.value = detuneCents;
-
-      noteGain2.gain.setValueAtTime(0.001, time);
-      noteGain2.gain.linearRampToValueAtTime(0.7, time + 0.01);
-      noteGain2.gain.setValueAtTime(0.7, time + duration - release);
-      noteGain2.gain.exponentialRampToValueAtTime(0.001, time + duration);
-
-      osc2.connect(noteGain2);
-      noteGain2.connect(gainNode);
-
-      osc2.start(time);
-      osc2.stop(time + duration + 0.01);
-
-      this.scheduledSources.push(osc2);
-      osc2.onended = () => {
-        noteGain2.disconnect();
-        const idx = this.scheduledSources.indexOf(osc2);
-        if (idx > -1) this.scheduledSources.splice(idx, 1);
-      };
-    }
   }
 
   playNote(freq, time, duration, gainNode, type) {
-    this._playOsc(freq, time, duration, gainNode, type, 0);
+    this._playOsc(freq, time, duration, gainNode, type);
   }
 
   updateArrangement() {
@@ -275,14 +246,6 @@ class Music {
     // 3-way cycle, changes every 3 passes: triangle → square → sawtooth
     const cycle = Math.floor(this.passCount / 3) % 3;
     return ['triangle', 'square', 'sawtooth'][cycle];
-  }
-
-  getDetuneAmount() {
-    // Gradual widening: silent → subtle → moderate → wide
-    if (this.passCount < 2) return 0;
-    if (this.passCount < 4) return 3;
-    if (this.passCount < 7) return 5;
-    return 8;
   }
 
   getGateLength() {
