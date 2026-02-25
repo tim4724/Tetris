@@ -11,7 +11,6 @@ class Music {
     this.nextDrumTime = 0;
     this.melodyIndex = 0;
     this.bassIndex = 0;
-    this.drumIndex = 0;
     this.scheduleTimer = null;
     this.melodyGain = null;
     this.bassGain = null;
@@ -52,25 +51,27 @@ class Music {
       [A2, 2], [A3, 2], [A2, 2], [R, 2],
     ];
 
-    // Theme B — Contrasting lyrical section (8 measures)
-    // Longer note values, stepwise motion, more lyrical feel
+    // Theme B — Contrasting section (8 measures)
+    // Same rhythmic feel as Theme A but descending/stepwise melodic contour
     this.melodyB = [
-      // m1: E5 half, C5 half
-      [E5, 4], [C5, 4],
-      // m2: D5 half, B4 half
-      [D5, 4], [B4, 4],
-      // m3: C5 half, A4 half
-      [C5, 4], [A4, 4],
-      // m4: Gs4 half, B4 half
-      [Gs4, 4], [B4, 4],
-      // m5: A4 half, C5 half (ascending resolution)
-      [A4, 4], [C5, 4],
-      // m6: B4 half, D5 half
-      [B4, 4], [D5, 4],
-      // m7: C5 half, E5 half
-      [C5, 4], [E5, 4],
-      // m8: D5 dotted-half, rest quarter
-      [D5, 6], [R, 2],
+      // Phrase 1 (descending, darker feel with Gs4)
+      // m1: E5(q) D5(8) C5(8) D5(q) C5(8) B4(8)
+      [E5, 2], [D5, 1], [C5, 1], [D5, 2], [C5, 1], [B4, 1],
+      // m2: A4(q) Gs4(8) A4(8) B4(q) A4(8) Gs4(8)
+      [A4, 2], [Gs4, 1], [A4, 1], [B4, 2], [A4, 1], [Gs4, 1],
+      // m3: A4(q.) B4(8) C5(q) D5(q)
+      [A4, 3], [B4, 1], [C5, 2], [D5, 2],
+      // m4: C5(q) A4(q) A4(q) rest(q)
+      [C5, 2], [A4, 2], [A4, 2], [R, 2],
+      // Phrase 2 (ascending resolution)
+      // m5: rest(8) C5(q) B4(8) A4(q) B4(8) C5(8)
+      [R, 1], [C5, 2], [B4, 1], [A4, 2], [B4, 1], [C5, 1],
+      // m6: D5(q.) C5(8) B4(q) A4(8) Gs4(8)
+      [D5, 3], [C5, 1], [B4, 2], [A4, 1], [Gs4, 1],
+      // m7: A4(q.) B4(8) C5(q) D5(q)
+      [A4, 3], [B4, 1], [C5, 2], [D5, 2],
+      // m8: C5(q) A4(q) A4(q) rest(q)
+      [C5, 2], [A4, 2], [A4, 2], [R, 2],
     ];
 
     this.bassB = [
@@ -129,7 +130,7 @@ class Music {
     this.bassGain.connect(this.masterGain);
 
     this.drumGain = this.ctx.createGain();
-    this.drumGain.gain.value = 0.5;
+    this.drumGain.gain.value = 0;
     this.drumGain.connect(this.masterGain);
 
     // Pre-generate 1s of white noise for snare/hi-hat
@@ -157,14 +158,15 @@ class Music {
     this.playing = true;
     this.melodyIndex = 0;
     this.bassIndex = 0;
-    this.drumIndex = 0;
     this.passCount = 0;
     this.scheduledSources = [];
     this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
     this.masterGain.gain.setValueAtTime(0.3, this.ctx.currentTime);
 
     // Start bass and drums silent — they fade in on later passes
+    this.bassGain.gain.cancelScheduledValues(this.ctx.currentTime);
     this.bassGain.gain.setValueAtTime(0, this.ctx.currentTime);
+    this.drumGain.gain.cancelScheduledValues(this.ctx.currentTime);
     this.drumGain.gain.setValueAtTime(0, this.ctx.currentTime);
 
     this.nextMelodyTime = this.ctx.currentTime + 0.1;
@@ -207,9 +209,6 @@ class Music {
     const lookahead = 0.2;
     const fullMelodyLen = this.fullMelody.length;
     const fullBassLen = this.fullBass.length;
-
-    // Detect pass transitions based on melody index wrapping
-    const prevPass = this.passCount;
 
     // Schedule melody
     while (this.nextMelodyTime < this.ctx.currentTime + lookahead) {
@@ -260,7 +259,6 @@ class Music {
         }
       }
       this.nextDrumTime += measureDuration;
-      this.drumIndex++;
     }
 
     this.scheduleTimer = setTimeout(() => this.schedule(), 50);
