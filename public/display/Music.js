@@ -25,27 +25,45 @@ class Music {
     const R = 0; // rest
 
     // Korobeiniki Theme A — two phrases, 8 measures total
+    // [frequency, duration in eighth notes]
     this.melody = [
       // Phrase 1
+      // m1: E5(q) B4(8) C5(8) D5(q) C5(8) B4(8)
       [E5, 2], [B4, 1], [C5, 1], [D5, 2], [C5, 1], [B4, 1],
+      // m2: A4(q) A4(8) C5(8) E5(q) D5(8) C5(8)
       [A4, 2], [A4, 1], [C5, 1], [E5, 2], [D5, 1], [C5, 1],
+      // m3: B4(q.) C5(8) D5(q) E5(q)
       [B4, 3], [C5, 1], [D5, 2], [E5, 2],
+      // m4: C5(q) A4(q) A4(q) rest(q)
       [C5, 2], [A4, 2], [A4, 2], [R, 2],
       // Phrase 2
+      // m5: rest(8) D5(q) F5(8) A5(q) G5(8) F5(8)
       [R, 1], [D5, 2], [F5, 1], [A5, 2], [G5, 1], [F5, 1],
+      // m6: E5(q.) C5(8) E5(q) D5(8) C5(8)
       [E5, 3], [C5, 1], [E5, 2], [D5, 1], [C5, 1],
+      // m7: B4(q.) C5(8) D5(q) E5(q)
       [B4, 3], [C5, 1], [D5, 2], [E5, 2],
+      // m8: C5(q) A4(q) A4(q) rest(q)
       [C5, 2], [A4, 2], [A4, 2], [R, 2],
     ];
 
+    // Bass line: octave bounce pattern following chord roots
     this.bass = [
+      // m1: Em
       [E2, 2], [E3, 2], [E2, 2], [E3, 2],
+      // m2: Am
       [A2, 2], [A3, 2], [A2, 2], [A3, 2],
+      // m3: G#dim -> Em
       [Gs2, 2], [Gs3, 2], [E2, 2], [E3, 2],
+      // m4: Am
       [A2, 2], [A3, 2], [A2, 2], [R, 2],
+      // m5: Dm -> F
       [D3, 2], [D3, 2], [F3, 2], [F3, 2],
+      // m6: C -> E
       [C3, 2], [C3, 2], [E3, 2], [E3, 2],
+      // m7: G#dim -> Em
       [Gs2, 2], [Gs3, 2], [E2, 2], [E3, 2],
+      // m8: Am
       [A2, 2], [A3, 2], [A2, 2], [R, 2],
     ];
   }
@@ -138,14 +156,13 @@ class Music {
     const lookahead = 0.2;
     const melodyLen = this.melody.length;
     const bassLen = this.bass.length;
-    const gate = this.getGateLength();
 
     // Schedule melody
     while (this.nextMelodyTime < this.ctx.currentTime + lookahead) {
       // Check for pass boundary
       if (this.melodyIndex > 0 && this.melodyIndex % melodyLen === 0) {
         this.passCount++;
-        this.updateArrangement();
+        this.updateArrangement(this.nextMelodyTime);
       }
 
       const idx = this.melodyIndex % melodyLen;
@@ -154,7 +171,8 @@ class Music {
 
       if (freq > 0) {
         const waveform = this.getMelodyWaveform();
-        this._playOsc(freq, this.nextMelodyTime, duration * gate, this.melodyGain, waveform, 0);
+        const gate = this.getGateLength();
+        this._playOsc(freq, this.nextMelodyTime, duration * gate, this.melodyGain, waveform);
 
         // Octave doubling: play melody one octave lower
         if (this.passCount >= 5) {
@@ -166,19 +184,23 @@ class Music {
       this.melodyIndex++;
     }
 
-    // Schedule bass
-    while (this.nextBassTime < this.ctx.currentTime + lookahead) {
-      const idx = this.bassIndex % bassLen;
-      const [freq, eighths] = this.bass[idx];
-      const duration = eighths * eighthDuration;
+    // Schedule bass (skip node creation while silent)
+    if (this.passCount < 1) {
+      this.nextBassTime = this.ctx.currentTime + lookahead;
+    } else {
+      while (this.nextBassTime < this.ctx.currentTime + lookahead) {
+        const idx = this.bassIndex % bassLen;
+        const [freq, eighths] = this.bass[idx];
+        const duration = eighths * eighthDuration;
 
-      if (freq > 0) {
-        const bassWaveform = this.getBassWaveform();
-        this._playOsc(freq, this.nextBassTime, duration * 0.85, this.bassGain, bassWaveform);
+        if (freq > 0) {
+          const bassWaveform = this.getBassWaveform();
+          this._playOsc(freq, this.nextBassTime, duration * 0.85, this.bassGain, bassWaveform);
+        }
+
+        this.nextBassTime += duration;
+        this.bassIndex++;
       }
-
-      this.nextBassTime += duration;
-      this.bassIndex++;
     }
 
     this.scheduleTimer = setTimeout(() => this.schedule(), 50);
@@ -211,24 +233,19 @@ class Music {
     };
   }
 
-  playNote(freq, time, duration, gainNode, type) {
-    this._playOsc(freq, time, duration, gainNode, type);
-  }
-
-  updateArrangement() {
-    const now = this.ctx.currentTime;
+  updateArrangement(beatTime) {
     const fadeTime = 2;
 
     if (this.passCount === 1) {
       // Pass 1: fade in bass
-      this.bassGain.gain.cancelScheduledValues(now);
-      this.bassGain.gain.setValueAtTime(this.bassGain.gain.value, now);
-      this.bassGain.gain.linearRampToValueAtTime(0.35, now + fadeTime);
+      this.bassGain.gain.cancelScheduledValues(beatTime);
+      this.bassGain.gain.setValueAtTime(0, beatTime);
+      this.bassGain.gain.linearRampToValueAtTime(0.35, beatTime + fadeTime);
     } else if (this.passCount === 5) {
       // Pass 5: fade in octave doubling
-      this.octaveGain.gain.cancelScheduledValues(now);
-      this.octaveGain.gain.setValueAtTime(this.octaveGain.gain.value, now);
-      this.octaveGain.gain.linearRampToValueAtTime(0.25, now + fadeTime);
+      this.octaveGain.gain.cancelScheduledValues(beatTime);
+      this.octaveGain.gain.setValueAtTime(0, beatTime);
+      this.octaveGain.gain.linearRampToValueAtTime(0.25, beatTime + fadeTime);
     }
   }
 
