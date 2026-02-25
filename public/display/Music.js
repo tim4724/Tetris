@@ -163,6 +163,11 @@ class Music {
       if (this.melodyIndex > 0 && this.melodyIndex % melodyLen === 0) {
         this.passCount++;
         this.updateArrangement(this.nextMelodyTime);
+        // Sync bass to melody phrase boundary when bass first enters
+        if (this.passCount === 1) {
+          this.nextBassTime = this.nextMelodyTime;
+          this.bassIndex = 0;
+        }
       }
 
       const idx = this.melodyIndex % melodyLen;
