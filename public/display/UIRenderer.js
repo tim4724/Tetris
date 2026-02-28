@@ -225,34 +225,23 @@ class UIRenderer {
 
   drawGarbageMeter(pendingGarbage) {
     const ctx = this.ctx;
-    const meterWidth = 4;
-    const meterX = this.boardX - meterWidth - 3;
+    const size = this.cellSize;
+    const meterX = this.boardX - size - 3;
     const maxRows = 20;
     const rows = Math.min(pendingGarbage, maxRows);
-    const meterHeight = (rows / maxRows) * this.boardHeight;
-    const meterY = this.boardY + this.boardHeight - meterHeight;
-    const r = 2;
+    const inset = 1;
+    const r = Math.min(3, size * 0.12);
 
-    // Pulsing glow for high garbage
-    const pulse = rows > 10 ? 0.6 + 0.3 * Math.sin(performance.now() / 200) : 0.8;
-
-    // Background track
-    ctx.fillStyle = 'rgba(255, 68, 68, 0.08)';
-    ctx.fillRect(meterX, this.boardY, meterWidth, this.boardHeight);
-
-    // Active meter
-    const grad = ctx.createLinearGradient(meterX, meterY, meterX, meterY + meterHeight);
-    grad.addColorStop(0, `rgba(255, 100, 68, ${pulse})`);
-    grad.addColorStop(1, `rgba(255, 34, 34, ${pulse})`);
-    ctx.fillStyle = grad;
-    ctx.fillRect(meterX, meterY, meterWidth, meterHeight);
-
-    // Glow
-    ctx.shadowColor = 'rgba(255, 68, 68, 0.4)';
-    ctx.shadowBlur = 6;
-    ctx.fillRect(meterX, meterY, meterWidth, meterHeight);
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
+    // Draw stacked gray blocks from bottom up
+    for (let i = 0; i < rows; i++) {
+      const y = this.boardY + this.boardHeight - (i + 1) * size;
+      ctx.fillStyle = '#3a3a4e';
+      this._roundRect(meterX + inset, y + inset, size - inset * 2, size - inset * 2, r);
+      ctx.fill();
+      // Subtle highlight matching garbage block style
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+      ctx.fillRect(meterX + inset + 1, y + inset + 1, size - inset * 2 - 2, 1);
+    }
   }
 
   drawKOOverlay() {

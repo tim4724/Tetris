@@ -36,12 +36,13 @@
   const scoreDisplay = document.getElementById('score-display');
   const touchArea = document.getElementById('touch-area');
   const feedbackLayer = document.getElementById('feedback-layer');
-  const garbageBar = document.getElementById('garbage-bar');
   const levelDisplay = document.getElementById('level-display');
   const linesDisplay = document.getElementById('lines-display');
   const linesProgressFill = document.getElementById('lines-progress-fill');
-  const rankDisplay = document.getElementById('rank-display');
-  const statsDisplay = document.getElementById('stats-display');
+  const gameoverTitle = document.getElementById('gameover-title');
+  const resultsList = document.getElementById('results-list');
+  const playAgainBtn = document.getElementById('play-again-btn');
+  const gameoverStatus = document.getElementById('gameover-status');
 
   // Screen management
   function showScreen(name) {
@@ -273,8 +274,6 @@
     levelDisplay.textContent = 'LVL 1';
     linesDisplay.textContent = '0 lines';
     linesProgressFill.style.width = '0%';
-    garbageBar.innerHTML = '';
-    garbageBar.classList.remove('garbage-bar-active', 'garbage-bar-critical');
     gameScreen.classList.remove('dead');
     gameScreen.style.setProperty('--player-color', playerColor);
     removeKoOverlay();
@@ -324,37 +323,74 @@
       gameScreen.classList.add('dead');
       showKoOverlay();
     }
-    if (data.garbageIncoming !== undefined) {
-      renderGarbage(data.garbageIncoming);
-    }
   }
 
   function onGameOver(data) {
-    const rank = data.rank;
-    const stats = data.stats || {};
-
-    let suffix = 'th';
-    if (rank === 1) suffix = 'st';
-    else if (rank === 2) suffix = 'nd';
-    else if (rank === 3) suffix = 'rd';
-
-    rankDisplay.textContent = '#' + rank;
-
-    let statsHtml = '';
-    if (stats.score !== undefined) statsHtml += 'Score: ' + stats.score + '<br>';
-    if (stats.lines !== undefined) statsHtml += 'Lines: ' + stats.lines + '<br>';
-    if (stats.level !== undefined) statsHtml += 'Level: ' + stats.level + '<br>';
-    statsDisplay.innerHTML = statsHtml;
-
-    showScreen('gameover');
+    // Player was KO'd mid-game — just mark as dead, wait for GAME_END for results
   }
 
   function onGameEnd(data) {
-    // If we haven't already shown gameover, show it now
-    if (currentScreen !== 'gameover') {
-      rankDisplay.textContent = 'Game Over';
-      statsDisplay.innerHTML = '';
-      showScreen('gameover');
+    renderGameResults(data.results);
+    showScreen('gameover');
+  }
+
+  function renderGameResults(results) {
+    resultsList.innerHTML = '';
+    gameoverTitle.textContent = 'RESULTS';
+
+    // Show play again button for host, status text for others
+    playAgainBtn.classList.toggle('hidden', !isHost);
+    gameoverStatus.textContent = isHost ? '' : 'Waiting for host...';
+
+    // Set winner glow color on the screen
+    var winnerColor = 'rgba(255, 215, 0, 0.06)';
+    if (results && results.length) {
+      var winner = results.find(function(r) { return r.rank === 1; });
+      if (winner) {
+        var wc = PLAYER_COLORS[(winner.playerId - 1) % PLAYER_COLORS.length];
+        winnerColor = 'color-mix(in srgb, ' + wc + ' 8%, transparent)';
+      }
+    }
+    gameoverScreen.style.setProperty('--winner-glow', winnerColor);
+
+    // Set player's own color for highlight
+    if (playerColor) {
+      gameoverScreen.style.setProperty('--me-color', playerColor);
+    }
+
+    if (!results || !results.length) return;
+
+    var sorted = results.slice().sort(function(a, b) { return a.rank - b.rank; });
+    for (var i = 0; i < sorted.length; i++) {
+      var r = sorted[i];
+      var pColor = PLAYER_COLORS[(r.playerId - 1) % PLAYER_COLORS.length];
+
+      var row = document.createElement('div');
+      row.className = 'result-row rank-' + r.rank;
+      row.style.setProperty('--row-delay', (0.2 + i * 0.08) + 's');
+      if (r.playerId === playerId) row.classList.add('is-me');
+
+      var rankEl = document.createElement('span');
+      rankEl.className = 'result-rank';
+      rankEl.textContent = r.rank <= 3 ? ['', '1st', '2nd', '3rd'][r.rank] : r.rank + 'th';
+
+      var info = document.createElement('div');
+      info.className = 'result-info';
+
+      var nameEl = document.createElement('span');
+      nameEl.className = 'result-name';
+      nameEl.textContent = PLAYER_NAMES[r.playerId - 1] || ('Player ' + r.playerId);
+      nameEl.style.color = pColor;
+
+      var scoreEl = document.createElement('span');
+      scoreEl.className = 'result-score';
+      scoreEl.textContent = (r.score || 0).toLocaleString() + ' pts';
+
+      info.appendChild(nameEl);
+      info.appendChild(scoreEl);
+      row.appendChild(rankEl);
+      row.appendChild(info);
+      resultsList.appendChild(row);
     }
   }
 
@@ -375,19 +411,6 @@
       rejoinBtn.classList.remove('hidden');
     }
     showScreen('waiting');
-  }
-
-  // Garbage bar rendering
-  function renderGarbage(count) {
-    garbageBar.innerHTML = '';
-    garbageBar.classList.toggle('garbage-bar-active', count > 0);
-    garbageBar.classList.toggle('garbage-bar-critical', count >= 4);
-    for (let i = 0; i < count; i++) {
-      const seg = document.createElement('div');
-      seg.className = 'garbage-segment';
-      seg.style.width = (100 / Math.max(count, 1)) + '%';
-      garbageBar.appendChild(seg);
-    }
   }
 
   // KO overlay
@@ -547,6 +570,12 @@
   startBtn.addEventListener('click', function () {
     if (!isHost || startBtn.disabled) return;
     send(MSG.START_GAME, { mode: MODE.COMPETITIVE });
+  });
+
+  // Play Again button (host only, on gameover screen)
+  playAgainBtn.addEventListener('click', function () {
+    if (!isHost) return;
+    send(MSG.PLAY_AGAIN);
   });
 
   // When the phone locks, the browser freezes the page and the WebSocket

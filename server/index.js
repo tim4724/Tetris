@@ -270,6 +270,11 @@ function handleControllerMessage(room, playerId, msg) {
         room.startGame(msg.mode, msg.settings);
       }
       break;
+    case MSG.PLAY_AGAIN:
+      if (playerId === room.hostId) {
+        room.playAgain();
+      }
+      break;
   }
 }
 

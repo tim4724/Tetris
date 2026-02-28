@@ -61,14 +61,14 @@
         <span><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="8"/><circle cx="10" cy="10" r="2.5" fill="currentColor" stroke="none"/></svg> ROTATE</span>
       </div>
     </div>
-    <div id="garbage-bar"></div>
   </div>
 
   <!-- Game over screen -->
   <div id="gameover-screen" class="screen hidden">
-    <h1 id="rank-display"></h1>
-    <div id="stats-display"></div>
-    <p>Waiting for next game...</p>
+    <h1 id="gameover-title">RESULTS</h1>
+    <div id="results-list"></div>
+    <button id="play-again-btn" class="hidden">PLAY AGAIN</button>
+    <p id="gameover-status"></p>
   </div>
 
   <script src="/shared/protocol.js"></script>

@@ -239,6 +239,7 @@ function onRoomReset() {
 }
 
 function onCountdown(msg) {
+  gameState = null;
   showScreen('game');
   countdownOverlay.classList.remove('hidden');
   countdownOverlay.textContent = msg.value;

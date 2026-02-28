@@ -92,17 +92,21 @@ class Animations {
       }
     }
 
-    // Text popup for special clears
+    // Text popup for clears that send garbage
     const firstRow = rows.find(r => r >= 0);
-    if (isTetris && firstRow != null) {
+    if (firstRow != null) {
       const cx = boardX + 5 * cellSize;
       const cy = boardY + firstRow * cellSize;
-      this.addTextPopup(cx, cy, 'TETRIS!', '#00ffff', true);
-    }
-    if (isTSpin && firstRow != null) {
-      const cx = boardX + 5 * cellSize;
-      const cy = boardY + firstRow * cellSize - cellSize;
-      this.addTextPopup(cx, cy, 'T-SPIN!', '#a000f0', true);
+      if (isTetris) {
+        this.addTextPopup(cx, cy, 'TETRIS!', '#00ffff', true);
+      } else if (rows.length === 3) {
+        this.addTextPopup(cx, cy, 'TRIPLE!', '#ffaa00', true);
+      } else if (rows.length === 2) {
+        this.addTextPopup(cx, cy, 'DOUBLE', '#ffffff', false);
+      }
+      if (isTSpin) {
+        this.addTextPopup(cx, cy - cellSize, 'T-SPIN!', '#a000f0', true);
+      }
     }
   }
 

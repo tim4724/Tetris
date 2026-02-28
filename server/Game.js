@@ -153,7 +153,7 @@ class Game {
     const board = this.boards.get(playerId);
     const lines = clearResult.linesCleared;
     const isTSpin = clearResult.isTSpin || false;
-    const combo = (board.scoring && board.scoring.combo) || 0;
+    const combo = (clearResult.scoreResult && clearResult.scoreResult.combo) || 0;
 
     this.callbacks.onEvent({
       type: 'line_clear',
