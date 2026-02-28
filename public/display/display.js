@@ -435,9 +435,12 @@ function playCountdownBeep(isGo) {
   }
 }
 
-// Welcome screen button: unlocks audio, connects, enters lobby
+// Welcome screen button: unlocks audio, enters fullscreen, connects, enters lobby
 newGameBtn.addEventListener('click', () => {
   initMusic();
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
   connect();
   showScreen('lobby');
 });
