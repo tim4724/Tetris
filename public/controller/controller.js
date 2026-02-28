@@ -39,10 +39,10 @@
   }
 
   // Extract room code from URL
-  roomCode = new URLSearchParams(location.search).get('room');
+  roomCode = location.pathname.split('/').filter(Boolean)[0] || null;
   if (!roomCode) {
     statusText.textContent = 'No Room Code';
-    statusDetail.textContent = 'Scan a QR code or use a link with ?room=ABCD';
+    statusDetail.textContent = 'Scan a QR code or use a join link';
     return;
   }
 

@@ -37,18 +37,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Redirect bare paths to trailing slash so relative URLs resolve correctly
-  if (urlPath === '/display' || urlPath === '/controller') {
-    const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-    res.writeHead(301, { Location: urlPath + '/' + qs });
-    res.end();
-    return;
-  }
-
   // Map directory paths to index.html
-  if (urlPath === '/' || urlPath === '/display/') {
+  if (urlPath === '/') {
     urlPath = '/display/index.html';
-  } else if (urlPath === '/controller/') {
+  } else if (urlPath.length > 1 && !urlPath.includes('.') && urlPath.split('/').filter(Boolean).length === 1) {
+    // Single path segment with no file extension → room code → serve controller
     urlPath = '/controller/index.html';
   }
 
@@ -168,10 +161,10 @@ async function handleNewConnection(ws, msg) {
 
     let joinUrl;
     if (PUBLIC_URL) {
-      joinUrl = `${PUBLIC_URL}/controller/?room=${roomCode}`;
+      joinUrl = `${PUBLIC_URL}/${roomCode}`;
     } else {
       const localIP = getLocalIP();
-      joinUrl = `http://${localIP}:${PORT}/controller/?room=${roomCode}`;
+      joinUrl = `http://${localIP}:${PORT}/${roomCode}`;
     }
     const qrDataUrl = await room.getQRUrl(joinUrl);
 
@@ -253,5 +246,5 @@ server.listen(PORT, () => {
   const localIP = getLocalIP();
   console.log(`Tetris server running on http://localhost:${PORT}`);
   console.log(`Local network: http://${localIP}:${PORT}`);
-  console.log(`Display: http://localhost:${PORT}/display/`);
+  console.log(`Display: http://localhost:${PORT}/`);
 });
