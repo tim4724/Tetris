@@ -83,10 +83,7 @@ class Room {
       playerCount: this.players.size
     });
 
-    // Broadcast lobby update to all controllers
-    this.broadcastToControllers(MSG.LOBBY_UPDATE, {
-      playerCount: this.players.size
-    });
+    this.broadcastLobbyUpdate();
 
     return { playerId, color, reconnectToken, isHost };
   }
@@ -111,9 +108,7 @@ class Room {
         this.sendToDisplay(MSG.ROOM_RESET);
       } else {
         // Non-host left — update lobby
-        this.broadcastToControllers(MSG.LOBBY_UPDATE, {
-          playerCount: this.players.size
-        });
+        this.broadcastLobbyUpdate();
         this.sendToDisplay(MSG.PLAYER_LEFT, {
           playerId,
           playerCount: this.players.size
@@ -151,6 +146,7 @@ class Room {
       player.graceTimer = null;
     }
 
+    this.sendToDisplay(MSG.PLAYER_RECONNECTED, { playerId });
     return true;
   }
 
@@ -163,6 +159,7 @@ class Room {
           clearTimeout(player.graceTimer);
           player.graceTimer = null;
         }
+        this.sendToDisplay(MSG.PLAYER_RECONNECTED, { playerId: id });
         return id;
       }
     }
@@ -359,6 +356,17 @@ class Room {
     }
   }
 
+  broadcastLobbyUpdate() {
+    for (const [id, player] of this.players) {
+      if (player.connected && player.ws) {
+        send(player.ws, MSG.LOBBY_UPDATE, {
+          playerCount: this.players.size,
+          isHost: id === this.hostId
+        });
+      }
+    }
+  }
+
   onGameEnd(results) {
     this.state = ROOM_STATE.RESULTS;
     this.broadcast(MSG.GAME_END, results);
@@ -369,8 +377,47 @@ class Room {
       this.game.stop();
       this.game = null;
     }
+
+    const disconnectedIds = [];
+    for (const [id, player] of this.players) {
+      if (!player.connected) {
+        disconnectedIds.push(id);
+      }
+    }
+
+    if (this.hostId !== null && disconnectedIds.includes(this.hostId)) {
+      this.state = ROOM_STATE.LOBBY;
+      this.broadcastToControllers(MSG.ERROR, {
+        code: 'HOST_DISCONNECTED',
+        message: 'Host disconnected'
+      });
+
+      for (const [, player] of this.players) {
+        if (player.ws) {
+          try { player.ws.close(); } catch (e) { /* ignore */ }
+        }
+      }
+
+      this.players.clear();
+      this.hostId = null;
+      this.sendToDisplay(MSG.ROOM_RESET);
+      return;
+    }
+
+    for (const id of disconnectedIds) {
+      this.players.delete(id);
+    }
     this.paused = false;
     this.state = ROOM_STATE.LOBBY;
+
+    for (const id of disconnectedIds) {
+      this.sendToDisplay(MSG.PLAYER_LEFT, {
+        playerId: id,
+        playerCount: this.players.size
+      });
+    }
+
+    this.broadcastLobbyUpdate();
     this.broadcast(MSG.RETURN_TO_LOBBY, { playerCount: this.players.size });
   }
 

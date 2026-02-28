@@ -201,6 +201,23 @@ describe('Room - reconnectByToken()', () => {
     assert.equal(player.graceTimer, null);
   });
 
+  test('token reconnect sends PLAYER_RECONNECTED to display', () => {
+    const ws1 = mockWs();
+    const result = room.addPlayer(ws1, 'Alice');
+    const token = result.reconnectToken;
+    room.state = ROOM_STATE.PLAYING;
+    room.removePlayer(1);
+
+    displayWs.sent.length = 0;
+
+    const ws2 = mockWs();
+    room.reconnectByToken(ws2, token);
+
+    const reconnectMsg = displayWs.sent.find(m => m.type === MSG.PLAYER_RECONNECTED);
+    assert.ok(reconnectMsg, 'display should receive PLAYER_RECONNECTED');
+    assert.equal(reconnectMsg.playerId, 1);
+  });
+
   test('invalid token returns null', () => {
     room.addPlayer(mockWs(), 'Alice');
     room.state = ROOM_STATE.PLAYING;
@@ -211,7 +228,7 @@ describe('Room - reconnectByToken()', () => {
     assert.equal(result, null);
   });
 
-  test('reconnect sends PLAYER_RECONNECTED to display', () => {
+  test('qr rejoin sends PLAYER_RECONNECTED to display', () => {
     const ws1 = mockWs();
     const result = room.addPlayer(ws1, 'Alice');
     room.state = ROOM_STATE.PLAYING;
@@ -260,6 +277,78 @@ describe('Room - startGame()', () => {
     // Cleanup
     if (room.countdownTimer) clearInterval(room.countdownTimer);
     if (room.game) room.game.stop();
+  });
+});
+
+describe('Room - returnToLobby()', () => {
+  let room, displayWs;
+
+  beforeEach(() => {
+    displayWs = mockWs();
+    room = new Room('TEST', displayWs);
+  });
+
+  test('removes disconnected players before returning to lobby', () => {
+    const hostWs = mockWs();
+    const guestWs = mockWs();
+    room.addPlayer(hostWs, 'Alice');
+    room.addPlayer(guestWs, 'Bob');
+
+    room.state = ROOM_STATE.RESULTS;
+    room.removePlayer(2);
+
+    displayWs.sent.length = 0;
+    hostWs.sent.length = 0;
+
+    room.returnToLobby();
+
+    assert.equal(room.state, ROOM_STATE.LOBBY);
+    assert.equal(room.players.size, 1);
+    assert.ok(room.players.has(1));
+    assert.ok(!room.players.has(2));
+
+    const playerLeft = displayWs.sent.find(m => m.type === MSG.PLAYER_LEFT);
+    assert.ok(playerLeft);
+    assert.equal(playerLeft.playerId, 2);
+    assert.equal(playerLeft.playerCount, 1);
+
+    const lobbyUpdate = hostWs.sent.find(m => m.type === MSG.LOBBY_UPDATE);
+    assert.ok(lobbyUpdate);
+    assert.equal(lobbyUpdate.playerCount, 1);
+    assert.equal(lobbyUpdate.isHost, true);
+
+    const returnToLobby = displayWs.sent.find(m => m.type === MSG.RETURN_TO_LOBBY);
+    assert.ok(returnToLobby);
+    assert.equal(returnToLobby.playerCount, 1);
+  });
+
+  test('resets the room when the disconnected player is the host', () => {
+    const hostWs = mockWs();
+    const guestWs = mockWs();
+    room.addPlayer(hostWs, 'Alice');
+    room.addPlayer(guestWs, 'Bob');
+
+    room.state = ROOM_STATE.RESULTS;
+    room.removePlayer(1);
+
+    displayWs.sent.length = 0;
+    guestWs.sent.length = 0;
+
+    room.returnToLobby();
+
+    assert.equal(room.state, ROOM_STATE.LOBBY);
+    assert.equal(room.players.size, 0);
+    assert.equal(room.hostId, null);
+
+    const error = guestWs.sent.find(m => m.type === MSG.ERROR);
+    assert.ok(error);
+    assert.equal(error.code, 'HOST_DISCONNECTED');
+
+    const reset = displayWs.sent.find(m => m.type === MSG.ROOM_RESET);
+    assert.ok(reset);
+
+    const returnToLobby = displayWs.sent.find(m => m.type === MSG.RETURN_TO_LOBBY);
+    assert.equal(returnToLobby, undefined);
   });
 });
 

@@ -340,6 +340,9 @@
 
   function onLobbyUpdate(data) {
     playerCount = data.playerCount;
+    if (typeof data.isHost === 'boolean') {
+      isHost = data.isHost;
+    }
     updatePlayerCount();
     if (isHost) updateStartButton();
   }
