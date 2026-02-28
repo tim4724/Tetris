@@ -31,6 +31,8 @@ const countdownOverlay = document.getElementById('countdown-overlay');
 const resultsList = document.getElementById('results-list');
 const playAgainBtn = document.getElementById('play-again-btn');
 const newGameResultsBtn = document.getElementById('new-game-results-btn');
+const gameToolbar = document.getElementById('game-toolbar');
+const fullscreenBtn = document.getElementById('fullscreen-btn');
 const pauseBtn = document.getElementById('pause-btn');
 const pauseOverlay = document.getElementById('pause-overlay');
 const pauseContinueBtn = document.getElementById('pause-continue-btn');
@@ -44,8 +46,8 @@ function showScreen(name) {
   // Keep game screen visible behind results and pause overlays
   gameScreen.classList.toggle('hidden', name !== 'game' && name !== 'results');
   resultsScreen.classList.toggle('hidden', name !== 'results');
-  // Show pause button only during active game
-  pauseBtn.classList.toggle('hidden', name !== 'game');
+  // Show toolbar only during active game
+  gameToolbar.classList.toggle('hidden', name !== 'game');
   // Hide pause overlay when switching away from game
   if (name !== 'game') {
     pauseOverlay.classList.add('hidden');
@@ -265,10 +267,8 @@ function onCountdown(msg) {
   showScreen('game');
   countdownOverlay.classList.remove('hidden');
   countdownOverlay.textContent = msg.value;
-  // Re-trigger animation
-  countdownOverlay.style.animation = 'none';
-  countdownOverlay.offsetHeight; // force reflow
-  countdownOverlay.style.animation = '';
+
+  playCountdownBeep(msg.value === 'GO');
 
   if (msg.value === 'GO') {
     if (music && !music.playing) music.start();
@@ -404,6 +404,37 @@ function initMusic() {
   music.init();
 }
 
+// Countdown beep using Web Audio API
+function playCountdownBeep(isGo) {
+  if (!music || !music.ctx) return;
+  const actx = music.ctx;
+  if (actx.state === 'suspended') actx.resume();
+
+  const osc = actx.createOscillator();
+  const gain = actx.createGain();
+  osc.connect(gain);
+  gain.connect(actx.destination);
+
+  if (isGo) {
+    // Higher pitch, longer sweep for "GO"
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(600, actx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1200, actx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.18, actx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, actx.currentTime + 0.3);
+    osc.start(actx.currentTime);
+    osc.stop(actx.currentTime + 0.3);
+  } else {
+    // Short tick for 3, 2, 1
+    osc.type = 'square';
+    osc.frequency.value = 440;
+    gain.gain.setValueAtTime(0.15, actx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, actx.currentTime + 0.12);
+    osc.start(actx.currentTime);
+    osc.stop(actx.currentTime + 0.12);
+  }
+}
+
 // Welcome screen button: unlocks audio, connects, enters lobby
 newGameBtn.addEventListener('click', () => {
   initMusic();
@@ -462,17 +493,26 @@ newGameResultsBtn.addEventListener('click', () => {
   send(MSG.RETURN_TO_LOBBY);
 });
 
+// --- Fullscreen ---
+fullscreenBtn.addEventListener('click', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+});
+
 // --- Pause ---
 function onGamePaused() {
   pauseOverlay.classList.remove('hidden');
-  pauseBtn.classList.add('hidden');
+  gameToolbar.classList.add('hidden');
   if (music) music.stop();
 }
 
 function onGameResumed() {
   pauseOverlay.classList.add('hidden');
   if (currentScreen === 'game') {
-    pauseBtn.classList.remove('hidden');
+    gameToolbar.classList.remove('hidden');
   }
   if (music) music.start();
 }

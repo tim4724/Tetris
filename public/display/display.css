@@ -267,33 +267,35 @@ html, body {
     radial-gradient(ellipse at 50% 50%, rgba(68, 68, 255, 0.08) 0%, transparent 60%),
     rgba(6, 6, 15, 0.8);
   z-index: 10;
-  animation: countPulse 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 #countdown-overlay.hidden {
   display: none;
 }
 
-@keyframes countPulse {
-  0% { transform: scale(1.6); opacity: 0; filter: blur(8px); }
-  40% { filter: blur(0); }
-  60% { transform: scale(0.97); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; filter: blur(0); }
-}
-
 /* ============================================
-   Pause Button & Overlay
+   Game Toolbar (fullscreen + pause)
    ============================================ */
-#pause-btn {
+#game-toolbar {
   position: absolute;
   top: clamp(10px, 1.5vh, 20px);
   right: clamp(10px, 1.5vw, 20px);
   z-index: 5;
+  display: flex;
+  gap: clamp(6px, 0.8vh, 10px);
+}
+
+#game-toolbar.hidden {
+  display: none;
+}
+
+#game-toolbar button {
   width: clamp(36px, 4vh, 52px);
   height: clamp(36px, 4vh, 52px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -301,10 +303,19 @@ html, body {
   transition: all 0.2s ease;
 }
 
-#pause-btn:hover {
+#game-toolbar button:hover {
   background: rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.8);
   border-color: rgba(255, 255, 255, 0.3);
+}
+
+#fullscreen-btn svg {
+  stroke: rgba(255, 255, 255, 0.5);
+  transition: stroke 0.2s ease;
+}
+
+#fullscreen-btn:hover svg {
+  stroke: rgba(255, 255, 255, 0.8);
 }
 
 #pause-btn .pause-icon {
@@ -324,10 +335,6 @@ html, body {
 #pause-btn:hover .pause-icon::before,
 #pause-btn:hover .pause-icon::after {
   background: rgba(255, 255, 255, 0.8);
-}
-
-#pause-btn.hidden {
-  display: none;
 }
 
 #pause-overlay {
