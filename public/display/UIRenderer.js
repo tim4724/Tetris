@@ -67,6 +67,11 @@ class UIRenderer {
       this.drawGarbageMeter(playerState.pendingGarbage);
     }
 
+    // 5b. Transient attacker-colored tint on newly appeared garbage meter blocks
+    if (playerState.garbageIndicatorEffects && playerState.garbageIndicatorEffects.length > 0) {
+      this.drawGarbageIndicatorEffects(playerState.garbageIndicatorEffects);
+    }
+
     // 6. KO overlay
     if (playerState.alive === false) {
       this.drawKOOverlay();
@@ -208,23 +213,59 @@ class UIRenderer {
     );
   }
 
+  getGarbageMeterLayout() {
+    return {
+      x: this.boardX - this.cellSize - 2,
+      y: this.boardY,
+      cellSize: this.cellSize,
+      rows: 20
+    };
+  }
+
   drawGarbageMeter(pendingGarbage) {
     const ctx = this.ctx;
-    const size = this.cellSize;
-    const meterX = this.boardX - size - 2;
-    const maxRows = 20;
-    const rows = Math.min(pendingGarbage, maxRows);
+    const meter = this.getGarbageMeterLayout();
+    const rows = Math.min(pendingGarbage, meter.rows);
     const inset = 1;
-    const r = Math.min(3, size * 0.12);
+    const r = Math.min(3, meter.cellSize * 0.12);
 
     // Draw stacked gray blocks from bottom up (may overlap hold panel)
     for (let i = 0; i < rows; i++) {
-      const y = this.boardY + this.boardHeight - (i + 1) * size;
+      const y = meter.y + this.boardHeight - (i + 1) * meter.cellSize;
       ctx.fillStyle = '#3a3a4e';
-      this._roundRect(meterX + inset, y + inset, size - inset * 2, size - inset * 2, r);
+      this._roundRect(meter.x + inset, y + inset, meter.cellSize - inset * 2, meter.cellSize - inset * 2, r);
       ctx.fill();
       ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-      ctx.fillRect(meterX + inset + 1, y + inset + 1, size - inset * 2 - 2, 1);
+      ctx.fillRect(meter.x + inset + 1, y + inset + 1, meter.cellSize - inset * 2 - 2, 1);
+    }
+  }
+
+  drawGarbageIndicatorEffects(effects) {
+    if (!Array.isArray(effects) || effects.length === 0) return;
+
+    const ctx = this.ctx;
+    const meter = this.getGarbageMeterLayout();
+    const now = performance.now();
+    const inset = 1;
+    const r = Math.min(3, meter.cellSize * 0.12);
+
+    for (const effect of effects) {
+      const alpha = this._getGarbageIndicatorAlpha(effect, now);
+      if (alpha <= 0) continue;
+
+      for (let row = effect.rowStart; row < effect.rowStart + effect.lines; row++) {
+        if (row < 0 || row >= meter.rows) continue;
+        const y = meter.y + row * meter.cellSize;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = effect.color;
+        this._roundRect(meter.x + inset, y + inset, meter.cellSize - inset * 2, meter.cellSize - inset * 2, r);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.fillRect(meter.x + inset + 1, y + inset + 1, meter.cellSize - inset * 2 - 2, 1);
+        ctx.restore();
+      }
     }
   }
 
@@ -359,6 +400,12 @@ class UIRenderer {
     if (!rgb) return hex;
     const factor = 1 - percent / 100;
     return `rgb(${Math.round(rgb.r * factor)}, ${Math.round(rgb.g * factor)}, ${Math.round(rgb.b * factor)})`;
+  }
+
+  _getGarbageIndicatorAlpha(effect, now) {
+    const elapsed = now - effect.startTime;
+    if (elapsed < 0 || elapsed >= effect.duration) return 0;
+    return effect.maxAlpha || 0.9;
   }
 }
 

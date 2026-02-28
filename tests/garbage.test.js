@@ -105,7 +105,7 @@ describe('GarbageManager - cancellation of incoming garbage', () => {
 describe('GarbageManager - garbage distribution', () => {
   test('garbage distributes to opponents, not sender', () => {
     const mgr = makeManager('p1', 'p2', 'p3');
-    mgr.processLineClear('p1', 4, false, -1, false);
+    const { deliveries } = mgr.processLineClear('p1', 4, false, -1, false);
 
     const p2Queue = mgr.queues.get('p2');
     const p3Queue = mgr.queues.get('p3');
@@ -114,6 +114,11 @@ describe('GarbageManager - garbage distribution', () => {
     assert.strictEqual(p2Queue.length, 1, 'p2 should receive garbage');
     assert.strictEqual(p3Queue.length, 1, 'p3 should receive garbage');
     assert.strictEqual(p1Queue.length, 0, 'p1 (sender) should not receive own garbage');
+    assert.deepStrictEqual(deliveries, [
+      { fromId: 'p1', toId: 'p2', lines: 4, gapColumn: deliveries[0].gapColumn },
+      { fromId: 'p1', toId: 'p3', lines: 4, gapColumn: deliveries[0].gapColumn }
+    ]);
+    assert.strictEqual(p2Queue[0].senderId, 'p1', 'queued garbage should retain sender');
   });
 
   test('single clear sends no garbage to anyone', () => {
@@ -140,6 +145,7 @@ describe('GarbageManager - getIncomingGarbage', () => {
     const incoming = mgr.getIncomingGarbage('p2');
     assert.strictEqual(incoming.length, 1);
     assert.strictEqual(incoming[0].lines, 4);
+    assert.strictEqual(incoming[0].senderId, 'p1');
 
     // Queue should now be empty
     const again = mgr.getIncomingGarbage('p2');

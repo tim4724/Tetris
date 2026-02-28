@@ -2,3 +2,5 @@ node_modules/
 .claude/worktrees/
 .playwright-mcp/
 .codex-run/
+output/
+progress.md

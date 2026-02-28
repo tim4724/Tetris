@@ -137,7 +137,7 @@ class Animations {
   }
 
   addGarbageShake(boardX, boardY) {
-    const duration = 250;
+    const duration = 180;
     this.active.push({
       type: 'shake',
       startTime: performance.now(),
@@ -147,11 +147,10 @@ class Animations {
       offsetX: 0,
       offsetY: 0,
       update(progress) {
-        const intensity = (1 - progress) * 5;
-        // Dampened oscillation
-        const freq = 1 - progress;
-        this.offsetX = Math.sin(progress * 25) * intensity * freq;
-        this.offsetY = Math.cos(progress * 30) * intensity * 0.5 * freq;
+        const intensity = (1 - progress) * 2.4;
+        const freq = 1 - progress * 0.5;
+        this.offsetX = Math.sin(progress * 18) * intensity * freq;
+        this.offsetY = Math.cos(progress * 20) * intensity * 0.18 * freq;
       },
       render() {
         // Shake is applied via canvas transform in the main render loop

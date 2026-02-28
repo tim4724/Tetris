@@ -253,6 +253,20 @@ describe('PlayerBoard - hardDrop()', () => {
     // Score should be higher by at least 2 (one cell drop)
     assert.ok(board.scoring.score > initialScore, 'Score should increase after hard drop');
   });
+
+  test('hardDrop() applies pending garbage with the expected gap', () => {
+    const board = makeBoard();
+    const { Piece } = require('../server/Piece');
+    board.currentPiece = new Piece('O');
+    board.currentPiece.x = 4;
+    board.currentPiece.y = 0;
+    board.addPendingGarbage(2, 3);
+
+    board.hardDrop();
+
+    assert.strictEqual(board.grid[BOARD_HEIGHT - 1][3], 0, 'garbage gap should be preserved');
+    assert.strictEqual(board.grid[BOARD_HEIGHT - 2][3], 0, 'garbage gap should be preserved');
+  });
 });
 
 describe('PlayerBoard - line clear', () => {

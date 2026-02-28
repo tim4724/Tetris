@@ -15,6 +15,7 @@ let ctx = null;
 let lastFrameTime = null;
 let playerIndexCounter = 0;
 let disconnectedQRs = new Map(); // playerId -> Image
+let garbageIndicatorEffects = new Map(); // playerId -> transient attacker-colored meter block overlays
 
 // --- DOM References ---
 const welcomeScreen = document.getElementById('welcome-screen');
@@ -218,6 +219,7 @@ function handleMessage(msg) {
       if (music) music.stop();
       gameState = null;
       disconnectedQRs.clear();
+      garbageIndicatorEffects.clear();
       showScreen('lobby');
       updateStartButton();
       break;
@@ -246,6 +248,7 @@ function onPlayerJoined(msg) {
 function onPlayerLeft(msg) {
   players.delete(msg.playerId);
   playerOrder = playerOrder.filter(id => id !== msg.playerId);
+  garbageIndicatorEffects.delete(msg.playerId);
   updatePlayerList();
   updateStartButton();
 }
@@ -258,6 +261,7 @@ function onRoomReset() {
   playerIndexCounter = 0;
   players.clear();
   playerOrder = [];
+  garbageIndicatorEffects.clear();
   updatePlayerList();
   updateStartButton();
   showScreen('lobby');
@@ -331,7 +335,26 @@ function onGarbageSent(msg) {
   if (idx < 0 || !boardRenderers[idx]) return;
 
   const br = boardRenderers[idx];
+  const attackerColor = players.get(msg.senderId)?.playerColor || '#ffffff';
   animations.addGarbageShake(br.x, br.y);
+
+  const shifted = (garbageIndicatorEffects.get(msg.toId) || [])
+    .map((effect) => ({
+      ...effect,
+      rowStart: effect.rowStart - msg.lines
+    }))
+    .filter((effect) => effect.rowStart + effect.lines > 0);
+
+  shifted.push({
+    startTime: performance.now(),
+    duration: 1000,
+    maxAlpha: 0.94,
+    color: attackerColor,
+    lines: msg.lines,
+    rowStart: Math.max(0, 20 - msg.lines)
+  });
+
+  garbageIndicatorEffects.set(msg.toId, shifted);
 }
 
 function onPlayerKO(msg) {
@@ -346,6 +369,7 @@ function onPlayerKO(msg) {
 function onGameEnd(msg) {
   if (music) music.stop();
   disconnectedQRs.clear();
+  garbageIndicatorEffects.clear();
   showScreen('results');
   // Retrigger fade-in animation
   resultsScreen.style.animation = 'none';
@@ -571,6 +595,7 @@ function renderLoop(timestamp) {
         score: 0,
         lines: 0,
         level: 1,
+        garbageIndicatorEffects: [],
         playerName: pInfo?.playerName || PLAYER_NAMES[i],
         playerColor: pInfo?.playerColor || PLAYER_COLORS[i]
       };
@@ -598,8 +623,17 @@ function renderLoop(timestamp) {
 
       // Augment player data with name info from our players map
       const pInfo = players.get(playerData.id);
+      const now = performance.now();
+      const activeGarbageIndicatorEffects = (garbageIndicatorEffects.get(playerData.id) || [])
+        .filter((effect) => now - effect.startTime < effect.duration);
+      if (activeGarbageIndicatorEffects.length > 0) {
+        garbageIndicatorEffects.set(playerData.id, activeGarbageIndicatorEffects);
+      } else {
+        garbageIndicatorEffects.delete(playerData.id);
+      }
       const enriched = {
         ...playerData,
+        garbageIndicatorEffects: activeGarbageIndicatorEffects,
         playerName: pInfo?.playerName || PLAYER_NAMES[i],
         playerColor: pInfo?.playerColor || PLAYER_COLORS[i]
       };

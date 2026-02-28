@@ -124,6 +124,13 @@ class Game {
       if (incoming && incoming.length > 0) {
         for (const g of incoming) {
           board.addPendingGarbage(g.lines, g.gapColumn);
+          this.callbacks.onEvent({
+            type: 'garbage_sent',
+            senderId: g.senderId,
+            toId: id,
+            lines: g.lines,
+            gapColumn: g.gapColumn
+          });
         }
       }
 
