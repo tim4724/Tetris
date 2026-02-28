@@ -326,14 +326,20 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
   });
 });
 
-// Start button
-startBtn.addEventListener('click', () => {
-  if (startBtn.disabled) return;
-  // Init music on user gesture to satisfy browser autoplay policy
+// Init music on any user gesture so it's ready even when game starts from controller
+function initMusic() {
   if (!music) {
     music = new Music();
   }
   music.init();
+}
+document.addEventListener('click', initMusic, { once: true });
+document.addEventListener('touchstart', initMusic, { once: true });
+
+// Start button
+startBtn.addEventListener('click', () => {
+  if (startBtn.disabled) return;
+  initMusic();
   const settings = {};
   if (selectedMode === MODE.RACE) {
     settings.lineGoal = 40;
