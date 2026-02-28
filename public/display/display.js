@@ -444,6 +444,7 @@ function renderResults(results) {
 // Play Again — restart with same players
 playAgainBtn.addEventListener('click', () => {
   initMusic();
+  gameState = null; // clear old boards so countdown shows clean canvas
   send(MSG.PLAY_AGAIN);
 });
 
@@ -469,7 +470,7 @@ exitBtn.addEventListener('click', () => {
 function renderLoop(timestamp) {
   requestAnimationFrame(renderLoop);
 
-  if ((currentScreen !== 'game' && currentScreen !== 'results') || !ctx || !gameState) return;
+  if ((currentScreen !== 'game' && currentScreen !== 'results') || !ctx) return;
 
   if (lastFrameTime === null) lastFrameTime = timestamp;
   const deltaMs = timestamp - lastFrameTime;
@@ -491,6 +492,26 @@ function renderLoop(timestamp) {
   }
   ctx.fillStyle = renderLoop._vignette;
   ctx.fillRect(0, 0, w, h);
+
+  // No game state yet (e.g. during countdown) — render empty boards
+  if (!gameState) {
+    for (let i = 0; i < playerOrder.length; i++) {
+      if (!boardRenderers[i] || !uiRenderers[i]) continue;
+      const pInfo = players.get(playerOrder[i]);
+      const empty = {
+        id: playerOrder[i],
+        alive: true,
+        score: 0,
+        lines: 0,
+        level: 1,
+        playerName: pInfo?.playerName || PLAYER_NAMES[i],
+        playerColor: pInfo?.playerColor || PLAYER_COLORS[i]
+      };
+      boardRenderers[i].render(empty);
+      uiRenderers[i].render(empty);
+    }
+    return;
+  }
 
   // Render each player
   if (gameState.players) {
@@ -531,22 +552,48 @@ function renderLoop(timestamp) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
         ctx.fillRect(bx, by, bw, bh);
 
-        // QR code image centered on board
         const qrImg = disconnectedQRs.get(playerData.id);
+        const labelSize = Math.max(10, br.cellSize * 0.55);
+        const labelGap = labelSize * 1.2;
+        const qrSize = Math.min(bw, bh) * 0.5;
+        const radius = qrSize * 0.08;
+        const pad = qrSize * 0.06;
+        const outerSize = qrSize + pad * 2;
+        // Center QR + label group vertically
+        const totalH = outerSize + labelGap + labelSize;
+        const groupY = by + (bh - totalH) / 2;
+        const outerX = bx + (bw - outerSize) / 2;
+        const outerY = groupY;
+
+        // Rounded white background (matches lobby QR style)
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(outerX, outerY, outerSize, outerSize, radius);
+        ctx.fill();
+
+        // Subtle border
+        ctx.strokeStyle = 'rgba(0, 200, 255, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Draw QR image clipped to rounded rect
         if (qrImg && qrImg.complete && qrImg.naturalWidth > 0) {
-          const qrSize = Math.min(bw, bh) * 0.55;
-          const qrX = bx + (bw - qrSize) / 2;
-          const qrY = by + (bh - qrSize) / 2 - br.cellSize;
-          ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(outerX + pad, outerY + pad, qrSize, qrSize, Math.max(1, radius - pad));
+          ctx.clip();
+          ctx.drawImage(qrImg, outerX + pad, outerY + pad, qrSize, qrSize);
+          ctx.restore();
         }
 
-        // "Scan to rejoin" label
-        const labelSize = Math.max(10, br.cellSize * 0.55);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        // "Scan to rejoin" label directly below QR (in player color)
+        ctx.fillStyle = enriched.playerColor || 'rgba(0, 200, 255, 0.7)';
         ctx.font = `600 ${labelSize}px sans-serif`;
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText('Scan to rejoin', bx + bw / 2, by + bh - br.cellSize * 0.5);
+        ctx.textBaseline = 'top';
+        ctx.letterSpacing = '0.1em';
+        ctx.fillText('SCAN TO REJOIN', bx + bw / 2, outerY + outerSize + labelGap);
+        ctx.letterSpacing = '0px';
       }
 
       if (shake.x !== 0 || shake.y !== 0) {
