@@ -1,7 +1,7 @@
 'use strict';
 
 // --- State ---
-let currentScreen = 'lobby';
+let currentScreen = 'welcome';
 let gameState = null;
 let ws = null;
 let players = new Map(); // playerId -> { playerName, playerColor, playerIndex }
@@ -17,6 +17,8 @@ let lastFrameTime = null;
 let playerIndexCounter = 0;
 
 // --- DOM References ---
+const welcomeScreen = document.getElementById('welcome-screen');
+const newGameBtn = document.getElementById('new-game-btn');
 const lobbyScreen = document.getElementById('lobby-screen');
 const gameScreen = document.getElementById('game-screen');
 const resultsScreen = document.getElementById('results-screen');
@@ -32,6 +34,7 @@ const lobbyBtn = document.getElementById('lobby-btn');
 // --- Screen Management ---
 function showScreen(name) {
   currentScreen = name;
+  welcomeScreen.classList.toggle('hidden', name !== 'welcome');
   lobbyScreen.classList.toggle('hidden', name !== 'lobby');
   gameScreen.classList.toggle('hidden', name !== 'game');
   resultsScreen.classList.toggle('hidden', name !== 'results');
@@ -351,20 +354,25 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
   });
 });
 
-// Init music on any user gesture so it's ready even when game starts from controller
+// Init music helper
 function initMusic() {
   if (!music) {
     music = new Music();
   }
   music.init();
 }
-document.addEventListener('click', initMusic, { once: true });
-document.addEventListener('touchstart', initMusic, { once: true });
+
+// Welcome screen button: unlocks audio, connects, enters lobby
+newGameBtn.addEventListener('click', () => {
+  initMusic();
+  connect();
+  showScreen('lobby');
+});
 
 // Start button
 startBtn.addEventListener('click', () => {
   if (startBtn.disabled) return;
-  initMusic();
+  initMusic(); // safety net
   const settings = {};
   if (selectedMode === MODE.RACE) {
     settings.lineGoal = 40;
@@ -514,5 +522,4 @@ window.addEventListener('resize', () => {
 });
 
 // --- Initialize ---
-connect();
 requestAnimationFrame(renderLoop);

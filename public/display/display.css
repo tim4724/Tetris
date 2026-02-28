@@ -41,6 +41,49 @@ html, body {
 }
 
 /* ============================================
+   Welcome Screen
+   ============================================ */
+#welcome-screen {
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(68, 68, 255, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(0, 255, 136, 0.04) 0%, transparent 40%);
+  gap: clamp(2rem, 5vh, 4rem);
+}
+
+#welcome-screen h1 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(2.5rem, 7vh, 6rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  background: linear-gradient(135deg, #4444ff, #00ccff, #00ff88);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 24px rgba(0, 200, 255, 0.35));
+  animation: fadeDown 0.6s ease-out both;
+}
+
+#new-game-btn {
+  padding: clamp(0.8rem, 1.6vh, 1.5rem) clamp(2.5rem, 5vw, 7rem);
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #00ff88 0%, #00dd77 100%);
+  color: #003d1f;
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1rem, 2.2vh, 1.8rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  animation: fadeUp 0.6s 0.3s ease-out both, btnPulse 2.5s 1s ease-in-out infinite;
+}
+
+#new-game-btn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 36px rgba(0, 255, 136, 0.5);
+}
+
+/* ============================================
    Lobby Screen
    ============================================ */
 #lobby-screen {
