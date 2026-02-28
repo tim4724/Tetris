@@ -4,13 +4,24 @@ class Animations {
   constructor(ctx) {
     this.ctx = ctx;
     this.active = [];
+    this._fontLoaded = document.fonts?.check?.('12px Orbitron') ?? false;
+    this._labelFont = this._fontLoaded ? 'Orbitron' : '"Courier New", monospace';
+  }
+
+  _checkFont() {
+    if (!this._fontLoaded) {
+      this._fontLoaded = document.fonts?.check?.('12px Orbitron') ?? false;
+      if (this._fontLoaded) this._labelFont = 'Orbitron';
+    }
   }
 
   addLineClear(boardX, boardY, cellSize, rows, isTetris, isTSpin) {
-    // rows is an array of visible-row indices (0-19)
     if (!Array.isArray(rows) || rows.length === 0) return;
 
-    const duration = 500;
+    const duration = 600;
+    const boardWidth = 10 * cellSize;
+
+    // Main line clear effect
     this.active.push({
       type: 'lineClear',
       startTime: performance.now(),
@@ -21,56 +32,108 @@ class Animations {
       rows,
       isTetris,
       isTSpin,
+      boardWidth,
       render(ctx, progress) {
-        // Phase 1 (0-0.3): Bright flash
-        // Phase 2 (0.3-1.0): Fade out with scanline dissolve
         for (const row of this.rows) {
           if (row < 0) continue;
           const ry = this.boardY + row * this.cellSize;
-          const rw = 10 * this.cellSize;
           const rh = this.cellSize;
 
-          if (progress < 0.3) {
-            // Bright white flash
-            const flashAlpha = 0.9 * (1 - progress / 0.3);
-            ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
-            ctx.fillRect(this.boardX, ry, rw, rh);
+          if (progress < 0.25) {
+            // Phase 1: Bright flash sweep from center
+            const flashProgress = progress / 0.25;
+            const flashAlpha = 0.9 * (1 - flashProgress * 0.5);
+            const sweepWidth = flashProgress * this.boardWidth;
+            const sweepX = this.boardX + (this.boardWidth - sweepWidth) / 2;
+
+            ctx.fillStyle = this.isTetris
+              ? `rgba(0, 240, 240, ${flashAlpha})`
+              : `rgba(255, 255, 255, ${flashAlpha})`;
+            ctx.fillRect(sweepX, ry, sweepWidth, rh);
           } else {
-            // Scanline dissolve effect
-            const fadeProgress = (progress - 0.3) / 0.7;
-            const alpha = 0.6 * (1 - fadeProgress);
-            const stripeCount = 5;
+            // Phase 2: Dissolve with sparkle particles
+            const fadeProgress = (progress - 0.25) / 0.75;
+            const alpha = 0.5 * (1 - fadeProgress);
+
+            // Scanline dissolve
+            const stripeCount = 6;
             const stripeH = rh / stripeCount;
             for (let s = 0; s < stripeCount; s++) {
-              // Stagger the fade per stripe
-              const stripeAlpha = alpha * Math.max(0, 1 - (fadeProgress + s * 0.1));
+              const stripeAlpha = alpha * Math.max(0, 1 - (fadeProgress + s * 0.08));
               if (stripeAlpha <= 0) continue;
-              ctx.fillStyle = this.isTetris
+              const color = this.isTetris
                 ? `rgba(0, 240, 240, ${stripeAlpha})`
                 : `rgba(255, 255, 255, ${stripeAlpha})`;
-              ctx.fillRect(this.boardX, ry + s * stripeH, rw, stripeH * 0.6);
+              ctx.fillStyle = color;
+              // Stagger horizontal dissolve per stripe
+              const shrink = fadeProgress * (s % 2 === 0 ? 1 : -1) * this.boardWidth * 0.3;
+              const sx = this.boardX + (shrink > 0 ? shrink : 0);
+              const sw = this.boardWidth - Math.abs(shrink);
+              if (sw > 0) {
+                ctx.fillRect(sx, ry + s * stripeH, sw, stripeH * 0.6);
+              }
             }
           }
         }
       }
     });
 
+    // Sparkle particles for each cleared row
+    for (const row of rows) {
+      if (row < 0) continue;
+      const particleCount = isTetris ? 16 : 8;
+      for (let i = 0; i < particleCount; i++) {
+        this._addSparkle(
+          boardX + Math.random() * boardWidth,
+          boardY + row * cellSize + Math.random() * cellSize,
+          isTetris ? '#00ffff' : '#ffffff',
+          400 + Math.random() * 400
+        );
+      }
+    }
+
     // Text popup for special clears
     const firstRow = rows.find(r => r >= 0);
     if (isTetris && firstRow != null) {
       const cx = boardX + 5 * cellSize;
       const cy = boardY + firstRow * cellSize;
-      this.addTextPopup(cx, cy, 'TETRIS!', '#00ffff');
+      this.addTextPopup(cx, cy, 'TETRIS!', '#00ffff', true);
     }
     if (isTSpin && firstRow != null) {
       const cx = boardX + 5 * cellSize;
       const cy = boardY + firstRow * cellSize - cellSize;
-      this.addTextPopup(cx, cy, 'T-SPIN!', '#a000f0');
+      this.addTextPopup(cx, cy, 'T-SPIN!', '#a000f0', true);
     }
   }
 
+  _addSparkle(x, y, color, duration) {
+    const vx = (Math.random() - 0.5) * 120;
+    const vy = -Math.random() * 80 - 20;
+
+    this.active.push({
+      type: 'sparkle',
+      startTime: performance.now(),
+      duration,
+      x, y, vx, vy, color,
+      size: 1.5 + Math.random() * 2,
+      render(ctx, progress) {
+        const t = progress * this.duration / 1000;
+        const px = this.x + this.vx * t;
+        const py = this.y + this.vy * t + 80 * t * t; // gravity
+        const alpha = 1 - progress;
+        const sz = this.size * (1 - progress * 0.5);
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = this.color;
+        ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+        ctx.restore();
+      }
+    });
+  }
+
   addGarbageShake(boardX, boardY) {
-    const duration = 200;
+    const duration = 250;
     this.active.push({
       type: 'shake',
       startTime: performance.now(),
@@ -80,9 +143,11 @@ class Animations {
       offsetX: 0,
       offsetY: 0,
       update(progress) {
-        const intensity = (1 - progress) * 4;
-        this.offsetX = (Math.random() - 0.5) * intensity;
-        this.offsetY = (Math.random() - 0.5) * intensity;
+        const intensity = (1 - progress) * 5;
+        // Dampened oscillation
+        const freq = 1 - progress;
+        this.offsetX = Math.sin(progress * 25) * intensity * freq;
+        this.offsetY = Math.cos(progress * 30) * intensity * 0.5 * freq;
       },
       render() {
         // Shake is applied via canvas transform in the main render loop
@@ -90,8 +155,11 @@ class Animations {
     });
   }
 
-  addTextPopup(x, y, text, color) {
-    const duration = 1000;
+  addTextPopup(x, y, text, color, hasGlow) {
+    this._checkFont();
+    const duration = 1200;
+    const font = this._labelFont;
+
     this.active.push({
       type: 'textPopup',
       startTime: performance.now(),
@@ -100,23 +168,47 @@ class Animations {
       y,
       text,
       color,
+      hasGlow: hasGlow || false,
+      font,
       render(ctx, progress) {
-        const alpha = 1 - progress;
-        const drift = progress * 40;
+        // Ease out for smooth motion
+        const ease = 1 - Math.pow(1 - progress, 3);
+        const alpha = progress < 0.8 ? 1 : 1 - (progress - 0.8) / 0.2;
+        const drift = ease * 50;
+        const scale = progress < 0.15 ? 0.5 + (progress / 0.15) * 0.7 : 1.2 - ease * 0.2;
+
         ctx.save();
+        ctx.translate(this.x, this.y - drift);
+        ctx.scale(scale, scale);
         ctx.globalAlpha = alpha;
+
+        if (this.hasGlow) {
+          ctx.shadowColor = this.color;
+          ctx.shadowBlur = 16;
+        }
+
         ctx.fillStyle = this.color;
-        ctx.font = 'bold 20px "Courier New", monospace';
+        ctx.font = `900 22px ${this.font}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(this.text, this.x, this.y - drift);
+        ctx.fillText(this.text, 0, 0);
+
+        // White inner highlight
+        if (this.hasGlow) {
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.fillText(this.text, 0, -1);
+        }
+
         ctx.restore();
       }
     });
   }
 
   addKO(boardX, boardY, boardWidth, boardHeight) {
-    const duration = 1500;
+    const duration = 1800;
+
+    // Red flash
     this.active.push({
       type: 'ko',
       startTime: performance.now(),
@@ -126,19 +218,35 @@ class Animations {
       boardWidth,
       boardHeight,
       render(ctx, progress) {
-        // Flash effect at the start
-        if (progress < 0.2) {
-          const flashAlpha = (1 - progress / 0.2) * 0.6;
-          ctx.fillStyle = `rgba(255, 0, 0, ${flashAlpha})`;
+        if (progress < 0.15) {
+          // Initial white flash
+          const flashAlpha = (1 - progress / 0.15) * 0.7;
+          ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+          ctx.fillRect(this.boardX, this.boardY, this.boardWidth, this.boardHeight);
+        } else if (progress < 0.4) {
+          // Red vignette
+          const redAlpha = ((0.4 - progress) / 0.25) * 0.4;
+          ctx.fillStyle = `rgba(255, 0, 0, ${redAlpha})`;
           ctx.fillRect(this.boardX, this.boardY, this.boardWidth, this.boardHeight);
         }
       }
     });
+
+    // Screen-edge red flash particles
+    for (let i = 0; i < 12; i++) {
+      this._addSparkle(
+        boardX + Math.random() * boardWidth,
+        boardY + Math.random() * boardHeight,
+        '#ff4444',
+        600 + Math.random() * 400
+      );
+    }
   }
 
   addCombo(x, y, combo) {
     if (combo >= 2) {
-      this.addTextPopup(x, y, `${combo} COMBO!`, '#ffe66d');
+      this._checkFont();
+      this.addTextPopup(x, y, `${combo} COMBO!`, '#ffe66d', true);
     }
   }
 

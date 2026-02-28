@@ -13,7 +13,7 @@ let music = null;
 let selectedMode = MODE.COMPETITIVE;
 let canvas = null;
 let ctx = null;
-let lastFrameTime = 0;
+let lastFrameTime = null;
 let playerIndexCounter = 0;
 
 // --- DOM References ---
@@ -72,23 +72,32 @@ function calculateLayout() {
   const h = window.innerHeight;
   const padding = 20;
 
-  // Determine grid arrangement
-  let gridCols, gridRows;
-  if (n === 1) { gridCols = 1; gridRows = 1; }
-  else if (n === 2) { gridCols = 2; gridRows = 1; }
-  else if (n === 3) { gridCols = 3; gridRows = 1; }
-  else { gridCols = 2; gridRows = 2; }
-
   // Each player needs: board (10 cells wide, 20 tall) + side panels (~5 cells each side)
   const totalCellsWide = 10 + 5 + 5; // board + hold panel + next panel
   const totalCellsTall = 20 + 3;       // board + name + score
 
-  const availW = (w - padding * (gridCols + 1)) / gridCols;
-  const availH = (h - padding * (gridRows + 1)) / gridRows;
+  // Compute cell size for a given grid arrangement
+  function cellSizeFor(cols, rows) {
+    const aw = (w - padding * (cols + 1)) / cols;
+    const ah = (h - padding * (rows + 1)) / rows;
+    return Math.floor(Math.min(aw / totalCellsWide, ah / totalCellsTall));
+  }
 
-  const cellFromW = availW / totalCellsWide;
-  const cellFromH = availH / totalCellsTall;
-  const cellSize = Math.floor(Math.min(cellFromW, cellFromH));
+  // Determine grid arrangement — pick layout that maximizes cell size
+  let gridCols, gridRows;
+  if (n === 1) { gridCols = 1; gridRows = 1; }
+  else if (n === 2) { gridCols = 2; gridRows = 1; }
+  else if (n === 3) { gridCols = 3; gridRows = 1; }
+  else {
+    // 4 players: compare 4x1 row vs 2x2 grid
+    if (cellSizeFor(4, 1) >= cellSizeFor(2, 2)) {
+      gridCols = 4; gridRows = 1;
+    } else {
+      gridCols = 2; gridRows = 2;
+    }
+  }
+
+  const cellSize = cellSizeFor(gridCols, gridRows);
 
   const boardWidthPx = 10 * cellSize;
   const boardHeightPx = 20 * cellSize;
@@ -409,12 +418,26 @@ function renderLoop(timestamp) {
 
   if (currentScreen !== 'game' || !ctx || !gameState) return;
 
+  if (lastFrameTime === null) lastFrameTime = timestamp;
   const deltaMs = timestamp - lastFrameTime;
   lastFrameTime = timestamp;
 
-  // Clear canvas
-  ctx.fillStyle = '#0a0a1a';
-  ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  // Clear canvas — deep space background with subtle radial vignette
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  ctx.fillStyle = '#06060f';
+  ctx.fillRect(0, 0, w, h);
+
+  // Subtle vignette (cached)
+  if (!renderLoop._vignette || renderLoop._vw !== w || renderLoop._vh !== h) {
+    renderLoop._vignette = ctx.createRadialGradient(w / 2, h / 2, h * 0.2, w / 2, h / 2, h * 0.8);
+    renderLoop._vignette.addColorStop(0, 'rgba(15, 15, 40, 0.3)');
+    renderLoop._vignette.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+    renderLoop._vw = w;
+    renderLoop._vh = h;
+  }
+  ctx.fillStyle = renderLoop._vignette;
+  ctx.fillRect(0, 0, w, h);
 
   // Render each player
   if (gameState.players) {
@@ -461,17 +484,28 @@ function renderLoop(timestamp) {
   }
 }
 
+let _timerFontReady = false;
 function drawTimer(elapsedMs) {
   const totalSeconds = Math.floor(elapsedMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   const timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
+  if (!_timerFontReady) {
+    _timerFontReady = document.fonts?.check?.('14px Orbitron') ?? false;
+  }
+  const font = _timerFontReady ? 'Orbitron' : '"Courier New", monospace';
+
+  const cellSize = boardRenderers.length > 0 ? boardRenderers[0].cellSize : 24;
+  const labelSize = Math.max(9, cellSize * 0.38);
+
   ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-  ctx.font = '16px "Courier New", monospace';
+  ctx.font = `700 ${labelSize}px ${font}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText(timeStr, window.innerWidth / 2, 8);
+  ctx.letterSpacing = '0.15em';
+  ctx.fillText(timeStr, window.innerWidth / 2, 10);
+  ctx.letterSpacing = '0px';
 }
 
 // --- Window Resize ---

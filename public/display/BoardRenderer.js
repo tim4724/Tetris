@@ -14,31 +14,49 @@ class BoardRenderer {
     this.accentColor = PLAYER_COLORS[playerIndex] || PLAYER_COLORS[0];
     this.boardWidth = COLS * cellSize;
     this.boardHeight = VISIBLE_ROWS * cellSize;
+    this._bgGradient = null;
+    this._blockGradients = new Map(); // cached per color string
   }
 
   render(playerState) {
     const ctx = this.ctx;
 
-    // 1. Board background
-    ctx.fillStyle = BOARD_BG_COLOR;
+    // 1. Board background — subtle vertical gradient
+    if (!this._bgGradient) {
+      this._bgGradient = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.boardHeight);
+      this._bgGradient.addColorStop(0, '#0a0a1e');
+      this._bgGradient.addColorStop(0.5, '#0d0d24');
+      this._bgGradient.addColorStop(1, '#08081a');
+    }
+    ctx.fillStyle = this._bgGradient;
     ctx.fillRect(this.x, this.y, this.boardWidth, this.boardHeight);
 
     // 2. Grid lines
-    ctx.strokeStyle = GRID_LINE_COLOR;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
     ctx.lineWidth = 0.5;
-    for (let r = 0; r <= VISIBLE_ROWS; r++) {
+    for (let r = 1; r < VISIBLE_ROWS; r++) {
       const py = this.y + r * this.cellSize;
       ctx.beginPath();
       ctx.moveTo(this.x, py);
       ctx.lineTo(this.x + this.boardWidth, py);
       ctx.stroke();
     }
-    for (let c = 0; c <= COLS; c++) {
+    for (let c = 1; c < COLS; c++) {
       const px = this.x + c * this.cellSize;
       ctx.beginPath();
       ctx.moveTo(px, this.y);
       ctx.lineTo(px, this.y + this.boardHeight);
       ctx.stroke();
+    }
+
+    // Grid intersection dots for depth
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    for (let r = 1; r < VISIBLE_ROWS; r++) {
+      for (let c = 1; c < COLS; c++) {
+        const px = this.x + c * this.cellSize;
+        const py = this.y + r * this.cellSize;
+        ctx.fillRect(px - 0.5, py - 0.5, 1, 1);
+      }
     }
 
     // 3. Placed blocks from grid
@@ -47,7 +65,7 @@ class BoardRenderer {
         for (let c = 0; c < playerState.grid[r].length; c++) {
           const cellVal = playerState.grid[r][c];
           if (cellVal > 0) {
-            this.drawBlock(c, r, PIECE_COLORS[cellVal]);
+            this.drawBlock(c, r, PIECE_COLORS[cellVal], cellVal === 8);
           }
         }
       }
@@ -57,13 +75,13 @@ class BoardRenderer {
     if (playerState.currentPiece && playerState.ghostY != null && playerState.alive !== false) {
       const piece = playerState.currentPiece;
       const ghostDisplayY = playerState.ghostY;
-      const ghostColor = GHOST_COLORS[piece.typeId] || 'rgba(255,255,255,0.15)';
+      const ghostColor = GHOST_COLORS[piece.typeId] || 'rgba(255,255,255,0.12)';
       if (piece.blocks) {
         for (const [bx, by] of piece.blocks) {
           const drawRow = ghostDisplayY + by;
           const drawCol = piece.x + bx;
           if (drawRow >= 0 && drawRow < VISIBLE_ROWS && drawCol >= 0 && drawCol < COLS) {
-            this.drawGhostBlock(drawCol, drawRow, ghostColor);
+            this.drawGhostBlock(drawCol, drawRow, ghostColor, piece.typeId);
           }
         }
       }
@@ -79,7 +97,7 @@ class BoardRenderer {
           const drawRow = pieceDisplayY + by;
           const drawCol = piece.x + bx;
           if (drawRow >= 0 && drawRow < VISIBLE_ROWS && drawCol >= 0 && drawCol < COLS) {
-            this.drawBlock(drawCol, drawRow, color);
+            this.drawBlock(drawCol, drawRow, color, false);
           }
         }
       }
@@ -87,59 +105,170 @@ class BoardRenderer {
 
     // 6. Clearing rows pulsing glow effect
     if (playerState.clearingRows && playerState.clearingRows.length > 0) {
-      const t = performance.now() / 200;
+      const t = performance.now() / 150;
       for (const row of playerState.clearingRows) {
         if (row >= 0 && row < VISIBLE_ROWS) {
-          // Pulsing white glow
-          const alpha = 0.35 + 0.25 * Math.sin(t * Math.PI);
+          const alpha = 0.3 + 0.2 * Math.sin(t * Math.PI);
+          // White core
           ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
           ctx.fillRect(this.x, this.y + row * this.cellSize, this.boardWidth, this.cellSize);
+          // Player accent tint
+          const rgb = this._hexToRgb(this.accentColor);
+          if (rgb) {
+            ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha * 0.3})`;
+            ctx.fillRect(this.x, this.y + row * this.cellSize, this.boardWidth, this.cellSize);
+          }
         }
       }
     }
 
-    // 7. Board border with player accent color
-    ctx.strokeStyle = this.accentColor;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(this.x - 1, this.y - 1, this.boardWidth + 2, this.boardHeight + 2);
+    // 7. Board border — ambient glow + clean stroke
+    this._drawBoardBorder();
   }
 
-  drawBlock(col, row, color) {
+  _drawBoardBorder() {
+    const ctx = this.ctx;
+    const bx = this.x - 1;
+    const by = this.y - 1;
+    const bw = this.boardWidth + 2;
+    const bh = this.boardHeight + 2;
+
+    // Outer glow — use save/restore for shadow cleanup
+    ctx.save();
+    const rgb = this._hexToRgb(this.accentColor);
+    if (rgb) {
+      ctx.shadowColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.35)`;
+      ctx.shadowBlur = 12;
+    }
+    ctx.strokeStyle = this.accentColor;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.restore();
+
+    // Inner edge highlight (top)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(this.x, this.y);
+    ctx.lineTo(this.x + this.boardWidth, this.y);
+    ctx.stroke();
+  }
+
+  drawBlock(col, row, color, isGarbage) {
     const ctx = this.ctx;
     const x = this.x + col * this.cellSize;
     const y = this.y + row * this.cellSize;
     const size = this.cellSize;
     const inset = 1;
+    const r = Math.min(3, size * 0.12); // subtle rounded corners
 
-    // Main block fill
-    ctx.fillStyle = color;
-    ctx.fillRect(x + inset, y + inset, size - inset * 2, size - inset * 2);
+    if (isGarbage) {
+      // Garbage blocks — flat muted style
+      ctx.fillStyle = '#3a3a4e';
+      this._roundRect(x + inset, y + inset, size - inset * 2, size - inset * 2, r);
+      ctx.fill();
+      // Subtle noise texture
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+      ctx.fillRect(x + inset + 1, y + inset + 1, size - inset * 2 - 2, 1);
+      return;
+    }
 
-    // Highlight (top-left bevel)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.fillRect(x + inset, y + inset, size - inset * 2, 2);
-    ctx.fillRect(x + inset, y + inset, 2, size - inset * 2);
+    // Main block fill with subtle gradient (cached per color)
+    let grad = this._blockGradients.get(color);
+    if (!grad) {
+      grad = ctx.createLinearGradient(0, 0, 0, size);
+      grad.addColorStop(0, this._lighten(color, 15));
+      grad.addColorStop(1, this._darken(color, 10));
+      this._blockGradients.set(color, grad);
+    }
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = grad;
+    this._roundRect(inset, inset, size - inset * 2, size - inset * 2, r);
+    ctx.fill();
 
-    // Shadow (bottom-right bevel)
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    ctx.fillRect(x + inset, y + size - inset - 2, size - inset * 2, 2);
-    ctx.fillRect(x + size - inset - 2, y + inset, 2, size - inset * 2);
+    // Top highlight
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.fillRect(inset + r, inset, size - inset * 2 - r * 2, Math.max(1.5, size * 0.08));
+
+    // Left highlight
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.fillRect(inset, inset + r, Math.max(1.5, size * 0.07), size - inset * 2 - r * 2);
+
+    // Bottom shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.fillRect(inset + r, size - inset - Math.max(1.5, size * 0.08), size - inset * 2 - r * 2, Math.max(1.5, size * 0.08));
+
+    // Inner shine spot
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    const shineSize = size * 0.25;
+    ctx.fillRect(size * 0.25, size * 0.2, shineSize, shineSize * 0.5);
+
+    ctx.restore();
   }
 
-  drawGhostBlock(col, row, color) {
+  drawGhostBlock(col, row, color, typeId) {
     const ctx = this.ctx;
     const x = this.x + col * this.cellSize;
     const y = this.y + row * this.cellSize;
     const size = this.cellSize;
+    const inset = 1.5;
 
-    // Translucent fill
-    ctx.fillStyle = color;
-    ctx.fillRect(x + 1, y + 1, size - 2, size - 2);
-
-    // Border outline
+    // Dotted outline style ghost
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 1.5, y + 1.5, size - 3, size - 3);
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.strokeRect(x + inset, y + inset, size - inset * 2, size - inset * 2);
+    ctx.setLineDash([]);
+
+    // Very faint fill
+    ctx.fillStyle = color.replace(/[\d.]+\)$/, '0.08)');
+    ctx.fillRect(x + inset, y + inset, size - inset * 2, size - inset * 2);
+  }
+
+  _roundRect(x, y, w, h, r) {
+    const ctx = this.ctx;
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  _hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : null;
+  }
+
+  _lighten(hex, percent) {
+    const rgb = this._hexToRgb(hex);
+    if (!rgb) return hex;
+    const factor = 1 + percent / 100;
+    const r = Math.min(255, Math.round(rgb.r * factor));
+    const g = Math.min(255, Math.round(rgb.g * factor));
+    const b = Math.min(255, Math.round(rgb.b * factor));
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  _darken(hex, percent) {
+    const rgb = this._hexToRgb(hex);
+    if (!rgb) return hex;
+    const factor = 1 - percent / 100;
+    const r = Math.round(rgb.r * factor);
+    const g = Math.round(rgb.g * factor);
+    const b = Math.round(rgb.b * factor);
+    return `rgb(${r}, ${g}, ${b})`;
   }
 }
 
