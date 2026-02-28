@@ -15,6 +15,9 @@ class TouchInput {
     this.SOFT_DROP_MIN_SPEED = 3;
     this.SOFT_DROP_MAX_SPEED = 10;
     this.SOFT_DROP_MAX_DIST = 200;
+    this.VERTICAL_LOCK_DISTANCE = 24;
+    this.VERTICAL_LOCK_RATIO = 1.1;
+    this.HORIZONTAL_LOCK_RATIO = 1.35;
 
     // Wheel config (for trackpad two-finger scroll)
     this.WHEEL_H_THRESHOLD = 60;
@@ -33,6 +36,7 @@ class TouchInput {
     this.lastTime = 0;
     this.isDragging = false;
     this.isSoftDropping = false;
+    this.gestureAxis = null;
 
     // Ring buffer for velocity calculation (last 4 positions)
     this.posBuffer = [];
@@ -80,6 +84,7 @@ class TouchInput {
     this.lastTime = 0;
     this.isDragging = false;
     this.isSoftDropping = false;
+    this.gestureAxis = null;
     this.posBuffer = [];
     if (this.onProgress) this.onProgress(null, 0);
   }
@@ -112,6 +117,20 @@ class TouchInput {
     const range = this.SOFT_DROP_MAX_DIST - this.SOFT_DROP_DEAD_ZONE;
     const t = Math.min(Math.max((distY - this.SOFT_DROP_DEAD_ZONE) / range, 0), 1);
     return Math.round(this.SOFT_DROP_MIN_SPEED + t * (this.SOFT_DROP_MAX_SPEED - this.SOFT_DROP_MIN_SPEED));
+  }
+
+  _updateGestureAxis(dx, dy) {
+    if (this.gestureAxis) return;
+
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+    if (Math.max(absDx, absDy) < this.VERTICAL_LOCK_DISTANCE) return;
+
+    if (absDy >= absDx * this.VERTICAL_LOCK_RATIO) {
+      this.gestureAxis = 'vertical';
+    } else if (absDx >= absDy * this.HORIZONTAL_LOCK_RATIO) {
+      this.gestureAxis = 'horizontal';
+    }
   }
 
   _onContextMenu(e) {
@@ -175,43 +194,54 @@ class TouchInput {
       return;
     }
 
-    // --- Horizontal: ratchet left/right (always active) ---
+    this._updateGestureAxis(dxFromStart, dyFromStart);
+
+    // --- Horizontal: ratchet left/right unless the gesture is vertically locked ---
     const dxFromAnchor = x - this.anchorX;
-    const steps = Math.trunc(dxFromAnchor / this.RATCHET_THRESHOLD);
-    if (steps !== 0) {
-      const action = steps > 0 ? INPUT.RIGHT : INPUT.LEFT;
-      const count = Math.abs(steps);
-      for (let i = 0; i < count; i++) {
-        this.onInput(action);
+    if (this.gestureAxis !== 'vertical') {
+      const steps = Math.trunc(dxFromAnchor / this.RATCHET_THRESHOLD);
+      if (steps !== 0) {
+        const action = steps > 0 ? INPUT.RIGHT : INPUT.LEFT;
+        const count = Math.abs(steps);
+        for (let i = 0; i < count; i++) {
+          this.onInput(action);
+        }
+        this._haptic(10);
+        this.anchorX += steps * this.RATCHET_THRESHOLD;
       }
-      this._haptic(10);
-      this.anchorX += steps * this.RATCHET_THRESHOLD;
     }
 
-    // --- Vertical: soft drop / hold (always active) ---
+    // --- Vertical: soft drop / hold unless the gesture is horizontally locked ---
     const dyFromAnchor = y - this.anchorY;
 
-    if (dyFromAnchor > this.SOFT_DROP_DEAD_ZONE) {
-      const speed = this._calcSoftDropSpeed(dyFromAnchor);
-      if (!this.isSoftDropping) {
-        this.isSoftDropping = true;
-        this._haptic(15);
-        this.onInput('soft_drop_start', { speed });
-      } else {
-        this.onInput('soft_drop_start', { speed });
+    if (this.gestureAxis !== 'horizontal') {
+      if (dyFromAnchor > this.SOFT_DROP_DEAD_ZONE) {
+        const speed = this._calcSoftDropSpeed(dyFromAnchor);
+        if (!this.isSoftDropping) {
+          this.isSoftDropping = true;
+          this._haptic(15);
+          this.onInput('soft_drop_start', { speed });
+        } else {
+          this.onInput('soft_drop_start', { speed });
+        }
+      } else if (this.isSoftDropping && dyFromAnchor <= this.SOFT_DROP_DEAD_ZONE) {
+        this.isSoftDropping = false;
+        this.onInput('soft_drop_end');
       }
-    } else if (this.isSoftDropping && dyFromAnchor <= this.SOFT_DROP_DEAD_ZONE) {
+    } else if (this.isSoftDropping) {
       this.isSoftDropping = false;
       this.onInput('soft_drop_end');
     }
 
     // --- Progress: report axis with most pending movement ---
     if (this.onProgress) {
-      const hProgress = Math.abs(x - this.anchorX) / this.RATCHET_THRESHOLD;
+      const hProgress = this.gestureAxis === 'vertical'
+        ? 0
+        : Math.abs(x - this.anchorX) / this.RATCHET_THRESHOLD;
 
       let vProgress = 0;
       let vDir = null;
-      if (!this.isSoftDropping) {
+      if (this.gestureAxis !== 'horizontal' && !this.isSoftDropping) {
         if (dyFromAnchor > 0) {
           vProgress = dyFromAnchor / this.SOFT_DROP_DEAD_ZONE;
           vDir = 'down';
@@ -266,7 +296,7 @@ class TouchInput {
     }
 
     // 2. Hard drop: fast downward flick
-    if (vy > this.FLICK_VELOCITY_THRESHOLD && absVy > absVx) {
+    if (this.gestureAxis !== 'horizontal' && vy > this.FLICK_VELOCITY_THRESHOLD && absVy > absVx) {
       this.onInput(INPUT.HARD_DROP);
       this._haptic([5, 5, 5]);
       this._resetState();
@@ -274,7 +304,7 @@ class TouchInput {
     }
 
     // 3. Hold: fast upward flick
-    if (vy < -this.FLICK_VELOCITY_THRESHOLD && absVy > absVx) {
+    if (this.gestureAxis !== 'horizontal' && vy < -this.FLICK_VELOCITY_THRESHOLD && absVy > absVx) {
       this.onInput(INPUT.HOLD);
       this._haptic(15);
       this._resetState();
@@ -282,7 +312,7 @@ class TouchInput {
     }
 
     // 4. Short downward swipe fallback: hard drop
-    if (totalDy > 50 && duration < 300 && Math.abs(totalDy) > Math.abs(totalDx) * 1.5) {
+    if (this.gestureAxis !== 'horizontal' && totalDy > 50 && duration < 300 && Math.abs(totalDy) > Math.abs(totalDx) * 1.5) {
       this.onInput(INPUT.HARD_DROP);
       this._haptic([5, 5, 5]);
       this._resetState();
@@ -290,7 +320,7 @@ class TouchInput {
     }
 
     // 5. Short upward swipe fallback: hold
-    if (totalDy < -30 && duration < 400 && Math.abs(totalDy) > Math.abs(totalDx) * 1.5) {
+    if (this.gestureAxis !== 'horizontal' && totalDy < -30 && duration < 400 && Math.abs(totalDy) > Math.abs(totalDx) * 1.5) {
       this.onInput(INPUT.HOLD);
       this._haptic(15);
       this._resetState();
@@ -384,4 +414,8 @@ class TouchInput {
 // Attach to window for browser use
 if (typeof window !== 'undefined') {
   window.TouchInput = TouchInput;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = TouchInput;
 }
