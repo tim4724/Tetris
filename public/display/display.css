@@ -355,3 +355,73 @@ html, body {
   color: #fff;
   box-shadow: 0 0 16px rgba(68, 68, 255, 0.3);
 }
+
+/* ============================================
+   Mobile Screen Hint
+   ============================================ */
+#mobile-hint {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.8rem, 2vh, 1.5rem);
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(68, 68, 255, 0.08) 0%, transparent 60%),
+    var(--bg-primary);
+  text-align: center;
+  padding: 2rem;
+}
+
+#mobile-hint .mobile-hint-icon {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+#mobile-hint h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1.3rem, 5vw, 2rem);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  background: linear-gradient(135deg, #4444ff, #00ccff, #00ff88);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+#mobile-hint p {
+  font-size: clamp(0.85rem, 3vw, 1rem);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+#mobile-hint button {
+  margin-top: 1rem;
+  padding: 0.5rem 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+#mobile-hint button:hover {
+  border-color: rgba(68, 68, 255, 0.4);
+  color: var(--text-primary);
+}
+
+/* Show only on phone-sized screens */
+@media (max-width: 768px) and (orientation: portrait) {
+  #mobile-hint { display: flex; }
+}
+
+@media (max-width: 568px) and (orientation: landscape) {
+  #mobile-hint { display: flex; }
+}

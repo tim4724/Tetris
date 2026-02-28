@@ -10,6 +10,14 @@
   <link rel="stylesheet" href="/display/display.css">
 </head>
 <body>
+  <!-- Mobile screen hint -->
+  <div id="mobile-hint">
+    <p class="mobile-hint-icon">🖥️</p>
+    <h2>Open on a Larger Screen</h2>
+    <p>This display is designed for TVs and computers.<br>Use your phone as a controller instead.</p>
+    <button onclick="this.parentElement.remove()">Continue Anyway</button>
+  </div>
+
   <!-- Lobby screen: QR code + player list + start button -->
   <div id="lobby-screen" class="screen">
     <h1>TETRIS PARTY</h1>
