@@ -362,11 +362,9 @@
 
   function showLobbyUI() {
     lobbyTitle.classList.remove('hidden');
-    roomCodeBox.classList.remove('hidden');
-    roomCodeValue.textContent = roomCode;
-    playerCountEl.classList.remove('hidden');
+    roomCodeBox.classList.add('hidden');
+    playerCountEl.classList.add('hidden');
     rejoinBtn.classList.add('hidden');
-    updatePlayerCount();
 
     var name = PLAYER_NAMES[playerId - 1] || ('Player ' + playerId);
     playerIdentity.style.setProperty('--id-color', playerColor);
