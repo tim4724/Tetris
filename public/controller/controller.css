@@ -195,21 +195,50 @@ html, body {
   padding: 0;
 }
 
+/* Status bar — two-row layout with accent stripe */
 #status-bar {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
   width: 100%;
-  height: 40px;
-  padding: 0 16px;
   padding-top: env(safe-area-inset-top);
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  background-image: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--player-color, #888) 5%, transparent),
+    transparent 60%
+  );
   flex-shrink: 0;
 }
 
+#status-bar-accent {
+  width: 4px;
+  flex-shrink: 0;
+  background: var(--player-color, #888);
+}
+
+#status-bar-rows {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 16px 8px;
+  gap: 4px;
+}
+
+#status-bar-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 #player-name {
-  font-weight: 600;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #player-indicator {
@@ -222,9 +251,44 @@ html, body {
 
 #score-display {
   margin-left: auto;
+  font-family: 'Orbitron', sans-serif;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 28px;
+  letter-spacing: 0.02em;
+}
+
+#status-bar-secondary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  color: #556;
+}
+
+#level-display {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+#lines-display {
+  font-variant-numeric: tabular-nums;
+}
+
+#lines-progress {
+  flex: 1;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+#lines-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--player-color, #888);
+  border-radius: 2px;
+  transition: width 0.3s ease;
 }
 
 #touch-area {
@@ -235,33 +299,156 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+}
+
+#feedback-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
 }
 
 #touch-hint {
   text-align: center;
   color: rgba(255, 255, 255, 0.3);
-  font-size: 16px;
-  line-height: 2;
+  font-size: 20px;
+  line-height: 2.2;
   transition: opacity 0.5s ease;
   pointer-events: none;
+  z-index: 0;
 }
 
 #touch-hint.fade-out {
   opacity: 0;
 }
 
+/* Gesture feedback animations */
+
+/* Tap radial wash */
+.feedback-ripple {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  margin-left: -150px;
+  margin-top: -150px;
+  background: radial-gradient(circle, var(--player-color, rgba(255,255,255,0.5)) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: rippleWash 250ms ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes rippleWash {
+  0% { transform: scale(0.3); opacity: 0.4; }
+  100% { transform: scale(1.2); opacity: 0; }
+}
+
+/* Directional wash overlays */
+.feedback-wash {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  animation: washFade 200ms ease-out forwards;
+  pointer-events: none;
+}
+
+.feedback-wash-left {
+  background: linear-gradient(to right,
+    var(--player-color, rgba(255,255,255,0.5)) 0%,
+    transparent 40%
+  );
+}
+
+.feedback-wash-right {
+  background: linear-gradient(to left,
+    var(--player-color, rgba(255,255,255,0.5)) 0%,
+    transparent 40%
+  );
+}
+
+.feedback-wash-down {
+  background: linear-gradient(to top,
+    var(--player-color, rgba(255,255,255,0.5)) 0%,
+    transparent 40%
+  );
+}
+
+.feedback-wash-up {
+  background: linear-gradient(to bottom,
+    var(--player-color, rgba(255,255,255,0.5)) 0%,
+    transparent 40%
+  );
+}
+
+@keyframes washFade {
+  0% { opacity: 0.15; }
+  100% { opacity: 0; }
+}
+
+/* Persistent wash for soft drop hold */
+.feedback-wash-hold {
+  animation: washFadeIn 150ms ease-out forwards;
+}
+
+.feedback-wash-hold.fade-out {
+  animation: washFade 200ms ease-out forwards;
+}
+
+@keyframes washFadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 0.15; }
+}
+
+/* KO overlay */
+#ko-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 96px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.25);
+  letter-spacing: 0.1em;
+  pointer-events: none;
+  z-index: 2;
+}
+
 #garbage-bar {
   width: 100%;
-  height: 6px;
+  height: 18px;
   flex-shrink: 0;
   background: #1a1a2e;
   display: flex;
   padding-bottom: env(safe-area-inset-bottom);
+  transition: box-shadow 0.3s ease;
+}
+
+#garbage-bar.garbage-bar-active {
+  box-shadow: 0 0 8px rgba(255, 68, 68, 0.4);
+}
+
+#garbage-bar.garbage-bar-critical {
+  animation: garbagePulse 0.8s ease-in-out infinite;
+}
+
+@keyframes garbagePulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 16px rgba(255, 68, 68, 0.7); }
 }
 
 .garbage-segment {
   height: 100%;
-  background: #ff4444;
+  background: linear-gradient(90deg, #ff6644, #ff2222);
   flex-shrink: 0;
 }
 
@@ -298,17 +485,20 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 96px;
-  font-weight: 800;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 128px;
+  font-weight: 900;
   color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 0 24px color-mix(in srgb, var(--player-color, #4ecdc4) 60%, transparent);
   pointer-events: none;
   z-index: 10;
   animation: countdownPulse 0.5s ease-out;
 }
 
 #game-screen .countdown-overlay.go {
-  color: #4ecdc4;
-  font-size: 72px;
+  color: var(--player-color, #4ecdc4);
+  font-size: 96px;
+  text-shadow: 0 0 32px color-mix(in srgb, var(--player-color, #4ecdc4) 50%, transparent);
   animation: countdownPulse 0.4s ease-out;
 }
 
@@ -320,8 +510,10 @@ html, body {
 /* Dead state */
 #game-screen.dead #touch-area {
   opacity: 0.4;
+  filter: grayscale(0.7);
 }
 
 #game-screen.dead #status-bar {
   opacity: 0.5;
+  filter: saturate(0.3);
 }

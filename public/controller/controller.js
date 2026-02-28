@@ -36,7 +36,11 @@
   const scoreDisplay = document.getElementById('score-display');
   const touchArea = document.getElementById('touch-area');
   const touchHint = document.getElementById('touch-hint');
+  const feedbackLayer = document.getElementById('feedback-layer');
   const garbageBar = document.getElementById('garbage-bar');
+  const levelDisplay = document.getElementById('level-display');
+  const linesDisplay = document.getElementById('lines-display');
+  const linesProgressFill = document.getElementById('lines-progress-fill');
   const rankDisplay = document.getElementById('rank-display');
   const statsDisplay = document.getElementById('stats-display');
 
@@ -244,9 +248,16 @@
     vibrate([15, 25, 20]);
     inputSeq = 0;
     scoreDisplay.textContent = '0';
+    levelDisplay.textContent = 'LVL 1';
+    linesDisplay.textContent = '0 lines';
+    linesProgressFill.style.width = '0%';
     garbageBar.innerHTML = '';
+    garbageBar.classList.remove('garbage-bar-active', 'garbage-bar-critical');
     gameScreen.classList.remove('dead');
+    gameScreen.style.setProperty('--player-color', playerColor);
+    removeKoOverlay();
     hintHidden = false;
+    touchHint.classList.remove('fade-out');
     removeCountdownOverlay();
     hideLobbyElements();
     showScreen('game');
@@ -282,8 +293,16 @@
     if (data.score !== undefined) {
       scoreDisplay.textContent = data.score;
     }
-    if (data.alive === false) {
+    if (data.level !== undefined) {
+      levelDisplay.textContent = 'LVL ' + data.level;
+    }
+    if (data.lines !== undefined) {
+      linesDisplay.textContent = data.lines + (data.lines === 1 ? ' line' : ' lines');
+      linesProgressFill.style.width = ((data.lines % 10) / 10 * 100) + '%';
+    }
+    if (data.alive === false && !gameScreen.classList.contains('dead')) {
       gameScreen.classList.add('dead');
+      showKoOverlay();
     }
     if (data.garbageIncoming !== undefined) {
       renderGarbage(data.garbageIncoming);
@@ -341,6 +360,8 @@
   // Garbage bar rendering
   function renderGarbage(count) {
     garbageBar.innerHTML = '';
+    garbageBar.classList.toggle('garbage-bar-active', count > 0);
+    garbageBar.classList.toggle('garbage-bar-critical', count >= 4);
     for (let i = 0; i < count; i++) {
       const seg = document.createElement('div');
       seg.className = 'garbage-segment';
@@ -349,11 +370,58 @@
     }
   }
 
+  // KO overlay
+  function showKoOverlay() {
+    removeKoOverlay();
+    const ko = document.createElement('div');
+    ko.id = 'ko-overlay';
+    ko.textContent = 'KO';
+    touchArea.appendChild(ko);
+  }
+
+  function removeKoOverlay() {
+    const el = document.getElementById('ko-overlay');
+    if (el) el.remove();
+  }
+
+  // Gesture feedback
+  let lastTouchX = 0, lastTouchY = 0;
+  let coordTracker = null;
+  let softDropActive = false;
+  let softDropWash = null;
+
+  function createFeedback(type, x, y) {
+    var el = document.createElement('div');
+    el.className = 'feedback-' + type;
+    if (x !== undefined && y !== undefined) {
+      var rect = feedbackLayer.getBoundingClientRect();
+      el.style.left = (x - rect.left) + 'px';
+      el.style.top = (y - rect.top) + 'px';
+    }
+    feedbackLayer.appendChild(el);
+    el.addEventListener('animationend', function () { el.remove(); });
+  }
+
+  function createWash(direction) {
+    var el = document.createElement('div');
+    el.className = 'feedback-wash feedback-wash-' + direction;
+    feedbackLayer.appendChild(el);
+    el.addEventListener('animationend', function () { el.remove(); });
+  }
+
   // Touch input
   function initTouchInput() {
     if (touchInput) {
       touchInput.destroy();
     }
+
+    // Track touch coordinates for positioned feedback (remove previous to avoid leak)
+    if (coordTracker) touchArea.removeEventListener('touchstart', coordTracker);
+    coordTracker = function (e) {
+      lastTouchX = e.touches[0].clientX;
+      lastTouchY = e.touches[0].clientY;
+    };
+    touchArea.addEventListener('touchstart', coordTracker, { passive: true });
 
     touchInput = new TouchInput(touchArea, function (action, data) {
       // Hide hints on first input
@@ -362,9 +430,35 @@
         hintHidden = true;
       }
 
+      // Gesture feedback — directional washes
+      if (action === 'rotate_cw') {
+        createFeedback('ripple', lastTouchX, lastTouchY);
+      } else if (action === 'left') {
+        createWash('right');
+      } else if (action === 'right') {
+        createWash('left');
+      } else if (action === 'hard_drop') {
+        createWash('up');
+      } else if (action === 'hold') {
+        createWash('down');
+      }
+
       if (action === 'soft_drop_start') {
+        if (!softDropActive) {
+          softDropActive = true;
+          softDropWash = document.createElement('div');
+          softDropWash.className = 'feedback-wash feedback-wash-up feedback-wash-hold';
+          feedbackLayer.appendChild(softDropWash);
+        }
         send(MSG.SOFT_DROP_START, { speed: data.speed });
       } else if (action === 'soft_drop_end') {
+        softDropActive = false;
+        if (softDropWash) {
+          var el = softDropWash;
+          softDropWash = null;
+          el.classList.add('fade-out');
+          el.addEventListener('animationend', function () { el.remove(); });
+        }
         send(MSG.SOFT_DROP_END);
       } else {
         // Regular input: left, right, rotate_cw, hard_drop, hold

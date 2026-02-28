@@ -30,17 +30,26 @@
   <!-- Game screen with touch area -->
   <div id="game-screen" class="screen hidden">
     <div id="status-bar">
-      <span id="player-name">Player</span>
-      <span id="player-indicator"></span>
-      <span id="score-display">0</span>
+      <div id="status-bar-accent"></div>
+      <div id="status-bar-rows">
+        <div id="status-bar-main">
+          <span id="player-name">Player</span>
+          <span id="player-indicator"></span>
+          <span id="score-display">0</span>
+        </div>
+        <div id="status-bar-secondary">
+          <span id="level-display">LVL 1</span>
+          <span id="lines-display">0 lines</span>
+          <div id="lines-progress"><div id="lines-progress-fill"></div></div>
+        </div>
+      </div>
     </div>
     <div id="touch-area">
+      <div id="feedback-layer"></div>
       <div id="touch-hint">
-        <p>&larr; drag &rarr; move</p>
-        <p>&darr; drag = soft drop</p>
-        <p>&darr; flick = hard drop</p>
-        <p>&uarr; flick = hold</p>
         <p>tap = rotate</p>
+        <p>&larr; drag &rarr; move</p>
+        <p>&darr; flick = drop &middot; &uarr; flick = hold</p>
       </div>
     </div>
     <div id="garbage-bar"></div>
