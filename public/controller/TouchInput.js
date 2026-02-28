@@ -1,16 +1,17 @@
 'use strict';
 
 class TouchInput {
-  constructor(touchElement, onInput) {
+  constructor(touchElement, onInput, onProgress) {
     this.el = touchElement;
     this.onInput = onInput;
+    this.onProgress = onProgress || null;
 
     // Config constants
-    this.RATCHET_THRESHOLD = 44;
+    this.RATCHET_THRESHOLD = 48;
     this.TAP_MAX_DISTANCE = 15;
     this.TAP_MAX_DURATION = 300;
     this.FLICK_VELOCITY_THRESHOLD = 0.8;
-    this.SOFT_DROP_DEAD_ZONE = 20;
+    this.SOFT_DROP_DEAD_ZONE = 72;
     this.SOFT_DROP_MIN_SPEED = 3;
     this.SOFT_DROP_MAX_SPEED = 10;
     this.SOFT_DROP_MAX_DIST = 200;
@@ -27,7 +28,6 @@ class TouchInput {
     this.lastTime = 0;
     this.isDragging = false;
     this.isSoftDropping = false;
-    this.dominantAxis = null;
 
     // Ring buffer for velocity calculation (last 4 positions)
     this.posBuffer = [];
@@ -57,8 +57,8 @@ class TouchInput {
     this.lastTime = 0;
     this.isDragging = false;
     this.isSoftDropping = false;
-    this.dominantAxis = null;
     this.posBuffer = [];
+    if (this.onProgress) this.onProgress(null, 0);
   }
 
   _pushPos(x, y, t) {
@@ -114,7 +114,6 @@ class TouchInput {
     this.lastTime = now;
     this.isDragging = false;
     this.isSoftDropping = false;
-    this.dominantAxis = null;
     this.posBuffer = [];
     this._pushPos(x, y, now);
   }
@@ -143,45 +142,61 @@ class TouchInput {
       }
     }
 
-    // Lock dominant axis once we have enough movement
-    if (this.isDragging && this.dominantAxis === null) {
-      if (absDxFromStart > absDyFromStart) {
-        this.dominantAxis = 'horizontal';
-      } else {
-        this.dominantAxis = 'vertical';
-      }
+    if (!this.isDragging) {
+      this.lastX = x; this.lastY = y; this.lastTime = now;
+      return;
     }
 
-    if (this.dominantAxis === 'horizontal') {
-      // Ratchet-based horizontal movement
-      const dxFromAnchor = x - this.anchorX;
-      const steps = Math.trunc(dxFromAnchor / this.RATCHET_THRESHOLD);
-      if (steps !== 0) {
-        const action = steps > 0 ? INPUT.RIGHT : INPUT.LEFT;
-        const count = Math.abs(steps);
-        for (let i = 0; i < count; i++) {
-          this.onInput(action);
-        }
-        this._haptic(10);
-        this.anchorX += steps * this.RATCHET_THRESHOLD;
+    // --- Horizontal: ratchet left/right (always active) ---
+    const dxFromAnchor = x - this.anchorX;
+    const steps = Math.trunc(dxFromAnchor / this.RATCHET_THRESHOLD);
+    if (steps !== 0) {
+      const action = steps > 0 ? INPUT.RIGHT : INPUT.LEFT;
+      const count = Math.abs(steps);
+      for (let i = 0; i < count; i++) {
+        this.onInput(action);
       }
-    } else if (this.dominantAxis === 'vertical') {
-      // Soft drop handling (downward movement)
-      const distDown = y - this.startY;
+      this._haptic(10);
+      this.anchorX += steps * this.RATCHET_THRESHOLD;
+    }
 
-      if (distDown > this.SOFT_DROP_DEAD_ZONE) {
-        const speed = this._calcSoftDropSpeed(distDown);
-        if (!this.isSoftDropping) {
-          this.isSoftDropping = true;
-          this._haptic(15);
-          this.onInput('soft_drop_start', { speed });
-        } else {
-          // Update speed as finger moves further
-          this.onInput('soft_drop_start', { speed });
+    // --- Vertical: soft drop / hold (always active) ---
+    const dyFromAnchor = y - this.anchorY;
+
+    if (dyFromAnchor > this.SOFT_DROP_DEAD_ZONE) {
+      const speed = this._calcSoftDropSpeed(dyFromAnchor);
+      if (!this.isSoftDropping) {
+        this.isSoftDropping = true;
+        this._haptic(15);
+        this.onInput('soft_drop_start', { speed });
+      } else {
+        this.onInput('soft_drop_start', { speed });
+      }
+    } else if (this.isSoftDropping && dyFromAnchor <= this.SOFT_DROP_DEAD_ZONE) {
+      this.isSoftDropping = false;
+      this.onInput('soft_drop_end');
+    }
+
+    // --- Progress: report axis with most pending movement ---
+    if (this.onProgress) {
+      const hProgress = Math.abs(x - this.anchorX) / this.RATCHET_THRESHOLD;
+
+      let vProgress = 0;
+      let vDir = null;
+      if (!this.isSoftDropping) {
+        if (dyFromAnchor > 0) {
+          vProgress = dyFromAnchor / this.SOFT_DROP_DEAD_ZONE;
+          vDir = 'down';
         }
-      } else if (this.isSoftDropping && distDown <= this.SOFT_DROP_DEAD_ZONE) {
-        this.isSoftDropping = false;
-        this.onInput('soft_drop_end');
+      }
+
+      if (hProgress > vProgress && hProgress > 0) {
+        const hDir = (x - this.anchorX) >= 0 ? 'right' : 'left';
+        this.onProgress(hDir, Math.min(hProgress, 1));
+      } else if (vProgress > 0) {
+        this.onProgress(vDir, Math.min(vProgress, 1));
+      } else if (!this.isSoftDropping) {
+        this.onProgress(null, 0);
       }
     }
 
@@ -225,32 +240,16 @@ class TouchInput {
       return;
     }
 
-    // 2. Flick detection: check velocity regardless of axis lock
-    //    (quick flicks may not generate enough moves to lock axis)
-    const isVerticalFlick = absVy > this.FLICK_VELOCITY_THRESHOLD && absVy > absVx;
-    const isVerticalMotion = this.dominantAxis === 'vertical' ||
-      (this.dominantAxis === null && Math.abs(totalDy) > Math.abs(totalDx));
-
-    if (isVerticalFlick || isVerticalMotion) {
-      if (vy > this.FLICK_VELOCITY_THRESHOLD || (isVerticalMotion && vy > this.FLICK_VELOCITY_THRESHOLD * 0.6)) {
-        // Flick down -> hard drop
-        this.onInput(INPUT.HARD_DROP);
-        this._haptic([5, 5, 5]);
-        this._resetState();
-        return;
-      }
-      if (vy < -this.FLICK_VELOCITY_THRESHOLD || (isVerticalMotion && vy < -this.FLICK_VELOCITY_THRESHOLD * 0.6)) {
-        // Flick up -> hold
-        this.onInput(INPUT.HOLD);
-        this._haptic(15);
-        this._resetState();
-        return;
-      }
+    // 2. Hard drop: fast downward flick
+    if (vy > this.FLICK_VELOCITY_THRESHOLD && absVy > absVx) {
+      this.onInput(INPUT.HARD_DROP);
+      this._haptic([5, 5, 5]);
+      this._resetState();
+      return;
     }
 
-    // 3. Short upward swipe fallback: if total motion was clearly upward
-    //    and fast enough, treat as hold even without high instantaneous velocity
-    if (totalDy < -30 && duration < 400 && Math.abs(totalDy) > Math.abs(totalDx) * 1.5) {
+    // 3. Hold: fast upward flick
+    if (vy < -this.FLICK_VELOCITY_THRESHOLD && absVy > absVx) {
       this.onInput(INPUT.HOLD);
       this._haptic(15);
       this._resetState();
@@ -261,6 +260,14 @@ class TouchInput {
     if (totalDy > 50 && duration < 300 && Math.abs(totalDy) > Math.abs(totalDx) * 1.5) {
       this.onInput(INPUT.HARD_DROP);
       this._haptic([5, 5, 5]);
+      this._resetState();
+      return;
+    }
+
+    // 5. Short upward swipe fallback: hold
+    if (totalDy < -30 && duration < 400 && Math.abs(totalDy) > Math.abs(totalDx) * 1.5) {
+      this.onInput(INPUT.HOLD);
+      this._haptic(15);
       this._resetState();
       return;
     }
@@ -277,6 +284,7 @@ class TouchInput {
       this.onInput('soft_drop_end');
     }
 
+    if (this.onProgress) this.onProgress(null, 0);
     this._resetState();
   }
 

@@ -13,7 +13,6 @@
   const MAX_RECONNECT_ATTEMPTS = 5;
   const RECONNECT_INTERVAL = 2000;
   let reconnectTimer = null;
-  let hintHidden = false;
   let isHost = false;
   let playerCount = 0;
   let gameCancelled = false;
@@ -35,7 +34,6 @@
   const playerIndicator = document.getElementById('player-indicator');
   const scoreDisplay = document.getElementById('score-display');
   const touchArea = document.getElementById('touch-area');
-  const touchHint = document.getElementById('touch-hint');
   const feedbackLayer = document.getElementById('feedback-layer');
   const garbageBar = document.getElementById('garbage-bar');
   const levelDisplay = document.getElementById('level-display');
@@ -256,8 +254,6 @@
     gameScreen.classList.remove('dead');
     gameScreen.style.setProperty('--player-color', playerColor);
     removeKoOverlay();
-    hintHidden = false;
-    touchHint.classList.remove('fade-out');
     removeCountdownOverlay();
     hideLobbyElements();
     showScreen('game');
@@ -389,6 +385,8 @@
   let coordTracker = null;
   let softDropActive = false;
   let softDropWash = null;
+  let buildupEl = null;
+  let buildupDir = null;
 
   function createFeedback(type, x, y) {
     var el = document.createElement('div');
@@ -409,6 +407,49 @@
     el.addEventListener('animationend', function () { el.remove(); });
   }
 
+  // Buildup wash manager
+  function removeBuildupEl() {
+    if (buildupEl) {
+      buildupEl.remove();
+      buildupEl = null;
+      buildupDir = null;
+    }
+  }
+
+  function flashBuildup() {
+    if (buildupEl) {
+      buildupEl.classList.add('flash');
+      var el = buildupEl;
+      buildupEl = null;
+      buildupDir = null;
+      el.addEventListener('animationend', function () { el.remove(); });
+    }
+  }
+
+  function onDragProgress(direction, progress) {
+    if (!direction || progress <= 0) {
+      removeBuildupEl();
+      return;
+    }
+
+    // Direction changed — recreate element
+    if (buildupDir !== direction) {
+      removeBuildupEl();
+      // Map drag direction to wash gradient (drag right = wash from left edge)
+      var washDir = direction;
+      if (direction === 'left') washDir = 'right';
+      else if (direction === 'right') washDir = 'left';
+      else if (direction === 'down') washDir = 'up';
+      else if (direction === 'up') washDir = 'down';
+      buildupEl = document.createElement('div');
+      buildupEl.className = 'feedback-buildup feedback-wash-' + washDir;
+      feedbackLayer.appendChild(buildupEl);
+      buildupDir = direction;
+    }
+
+    buildupEl.style.opacity = progress * 0.15;
+  }
+
   // Touch input
   function initTouchInput() {
     if (touchInput) {
@@ -424,28 +465,26 @@
     touchArea.addEventListener('touchstart', coordTracker, { passive: true });
 
     touchInput = new TouchInput(touchArea, function (action, data) {
-      // Hide hints on first input
-      if (!hintHidden && touchHint) {
-        touchHint.classList.add('fade-out');
-        hintHidden = true;
-      }
-
-      // Gesture feedback — directional washes
+      // Gesture feedback
       if (action === 'rotate_cw') {
         createFeedback('ripple', lastTouchX, lastTouchY);
-      } else if (action === 'left') {
-        createWash('right');
-      } else if (action === 'right') {
-        createWash('left');
-      } else if (action === 'hard_drop') {
-        createWash('up');
-      } else if (action === 'hold') {
-        createWash('down');
+      } else if (action === 'left' || action === 'right') {
+        // Flash the horizontal buildup wash on ratchet step
+        if (buildupEl) {
+          flashBuildup();
+        } else {
+          createWash(action === 'left' ? 'right' : 'left');
+        }
+      } else if (action === 'hard_drop' || action === 'hold') {
+        // Flick gestures — clear any stale buildup, use fresh directional wash
+        removeBuildupEl();
+        createWash(action === 'hard_drop' ? 'up' : 'down');
       }
 
       if (action === 'soft_drop_start') {
         if (!softDropActive) {
           softDropActive = true;
+          removeBuildupEl();
           softDropWash = document.createElement('div');
           softDropWash.className = 'feedback-wash feedback-wash-up feedback-wash-hold';
           feedbackLayer.appendChild(softDropWash);
@@ -464,7 +503,7 @@
         // Regular input: left, right, rotate_cw, hard_drop, hold
         send(MSG.INPUT, { action: action, seq: inputSeq++ });
       }
-    });
+    }, onDragProgress);
   }
 
   // Rejoin button
