@@ -2,13 +2,10 @@
 
 const { PlayerBoard } = require('./PlayerBoard.js');
 const { GarbageManager } = require('./GarbageManager.js');
-const { MODE } = require('../public/shared/protocol.js');
 const { LOGIC_TICK_MS, BROADCAST_TICK_MS } = require('./constants.js');
 
 class Game {
-  constructor(players, mode, settings, callbacks) {
-    this.mode = mode;
-    this.settings = settings;
+  constructor(players, callbacks) {
     this.callbacks = callbacks; // { onGameState, onEvent, onGameEnd }
     this.boards = new Map();
     this.playerIds = [];
@@ -23,16 +20,10 @@ class Game {
       this.playerIds.push(id);
     }
 
-    this.garbageManager = null;
-    if (mode === MODE.COMPETITIVE) {
-      this.garbageManager = new GarbageManager();
-      for (const id of this.playerIds) {
-        this.garbageManager.addPlayer(id);
-      }
+    this.garbageManager = new GarbageManager();
+    for (const id of this.playerIds) {
+      this.garbageManager.addPlayer(id);
     }
-
-    this.lineGoal = (settings && settings.lineGoal) || 40;
-    this.timeLimit = (settings && settings.timeLimit) || null;
   }
 
   start() {
@@ -109,12 +100,10 @@ class Game {
       }
 
       // Apply pending garbage
-      if (this.garbageManager) {
-        const incoming = this.garbageManager.getIncomingGarbage(id);
-        if (incoming && incoming.length > 0) {
-          for (const g of incoming) {
-            board.addPendingGarbage(g.lines, g.gapColumn);
-          }
+      const incoming = this.garbageManager.getIncomingGarbage(id);
+      if (incoming && incoming.length > 0) {
+        for (const g of incoming) {
+          board.addPendingGarbage(g.lines, g.gapColumn);
         }
       }
 
@@ -144,8 +133,7 @@ class Game {
 
     this.callbacks.onGameState({
       players: playerArr,
-      elapsed,
-      mode: this.mode
+      elapsed
     });
   }
 
@@ -164,49 +152,26 @@ class Game {
       combo
     });
 
-    if (this.garbageManager && this.mode === MODE.COMPETITIVE) {
-      this.garbageManager.processLineClear(playerId, lines, isTSpin, combo);
-    }
+    this.garbageManager.processLineClear(playerId, lines, isTSpin, combo);
   }
 
   checkWinCondition() {
     if (this.ended) return;
 
-    if (this.mode === MODE.COMPETITIVE) {
-      const alive = this.playerIds.filter(id => this.boards.get(id).alive);
-      // Only end when there's a last-man-standing (need 2+ players for elimination)
-      if (this.playerIds.length >= 2 && alive.length <= 1) {
-        this.ended = true;
-        this.stop();
-        this.callbacks.onGameEnd(this.getResults());
-      }
-      // Single player competitive: end if they die
-      if (this.playerIds.length === 1 && alive.length === 0) {
-        this.ended = true;
-        this.stop();
-        this.callbacks.onGameEnd(this.getResults());
-      }
-    } else if (this.mode === MODE.RACE) {
-      // Check if anyone reached line goal
-      for (const [id, board] of this.boards) {
-        const state = board.scoring ? board.scoring.getState() : null;
-        if (state && state.lines >= this.lineGoal) {
-          this.ended = true;
-          this.stop();
-          this.callbacks.onGameEnd(this.getResults());
-          return;
-        }
-      }
+    const alive = this.playerIds.filter(id => this.boards.get(id).alive);
 
-      // Check time limit
-      if (this.timeLimit) {
-        const elapsed = Date.now() - this.startTime;
-        if (elapsed >= this.timeLimit) {
-          this.ended = true;
-          this.stop();
-          this.callbacks.onGameEnd(this.getResults());
-        }
-      }
+    // Multiplayer: last-man-standing
+    if (this.playerIds.length >= 2 && alive.length <= 1) {
+      this.ended = true;
+      this.stop();
+      this.callbacks.onGameEnd(this.getResults());
+    }
+
+    // Single player: end when they die
+    if (this.playerIds.length === 1 && alive.length === 0) {
+      this.ended = true;
+      this.stop();
+      this.callbacks.onGameEnd(this.getResults());
     }
   }
 
@@ -234,7 +199,6 @@ class Game {
     results.forEach((r, i) => { r.rank = i + 1; });
 
     return {
-      mode: this.mode,
       elapsed: Date.now() - this.startTime,
       results
     };

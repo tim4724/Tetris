@@ -1,6 +1,6 @@
 'use strict';
 
-const { MSG, MODE, ROOM_STATE } = require('../public/shared/protocol.js');
+const { MSG, ROOM_STATE } = require('../public/shared/protocol.js');
 const QRCode = require('qrcode');
 const Game = require('./Game.js');
 const {
@@ -201,7 +201,7 @@ class Room {
     }
   }
 
-  startGame(mode, settings) {
+  startGame() {
     if (this.state !== ROOM_STATE.LOBBY) return;
 
     if (this.players.size < 1) {
@@ -209,25 +209,21 @@ class Room {
       return;
     }
 
-    this._lastMode = mode;
-    this._lastSettings = settings;
-    this._startNewGame(mode, settings);
+    this._startNewGame();
   }
 
   playAgain() {
     if (this.state !== ROOM_STATE.RESULTS) return;
-    this._startNewGame(this._lastMode, this._lastSettings);
+    this._startNewGame();
   }
 
-  _startNewGame(mode, settings) {
+  _startNewGame() {
     if (this.game) {
       this.game.stop();
       this.game = null;
     }
 
     this.state = ROOM_STATE.COUNTDOWN;
-    const gameMode = mode || MODE.COMPETITIVE;
-    const gameSettings = settings || {};
 
     this.startCountdown(() => {
       // Include ALL players (even disconnected) so they keep their slot
@@ -236,7 +232,7 @@ class Room {
         gamePlayers.set(id, { ws: p.ws });
       }
 
-      this.game = new Game(gamePlayers, gameMode, gameSettings, {
+      this.game = new Game(gamePlayers, {
         onGameState: (state) => {
           this.sendToDisplay(MSG.GAME_STATE, state);
           if (state.players) {
@@ -267,7 +263,7 @@ class Room {
       });
 
       this.state = ROOM_STATE.PLAYING;
-      this.broadcast(MSG.GAME_START, { mode: gameMode });
+      this.broadcast(MSG.GAME_START, {});
       this.game.start();
 
       // Re-notify display about any still-disconnected players so QR overlays appear

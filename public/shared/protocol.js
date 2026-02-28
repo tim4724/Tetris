@@ -48,12 +48,6 @@ const INPUT = {
   HOLD: 'hold'
 };
 
-// Game modes
-const MODE = {
-  COMPETITIVE: 'competitive',
-  RACE: 'race'
-};
-
 // Room states
 const ROOM_STATE = {
   LOBBY: 'lobby',
@@ -64,5 +58,5 @@ const ROOM_STATE = {
 
 // Export for both Node.js and browser
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { MSG, INPUT, MODE, ROOM_STATE };
+  module.exports = { MSG, INPUT, ROOM_STATE };
 }

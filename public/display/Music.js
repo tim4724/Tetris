@@ -73,7 +73,7 @@ class Music {
     this.ctx = new AudioContext();
 
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = 0.3;
+    this.masterGain.gain.value = 0.12;
     this.masterGain.connect(this.ctx.destination);
 
     this.melodyGain = this.ctx.createGain();
@@ -109,7 +109,7 @@ class Music {
     this.passCount = 0;
     this.scheduledSources = [];
     this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
-    this.masterGain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+    this.masterGain.gain.setValueAtTime(0.12, this.ctx.currentTime);
 
     // Start bass and octave doubling silent — they fade in on later passes
     this.bassGain.gain.cancelScheduledValues(this.ctx.currentTime);

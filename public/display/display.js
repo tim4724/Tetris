@@ -10,7 +10,6 @@ let boardRenderers = [];
 let uiRenderers = [];
 let animations = null;
 let music = null;
-let selectedMode = MODE.COMPETITIVE;
 let canvas = null;
 let ctx = null;
 let lastFrameTime = null;
@@ -381,15 +380,6 @@ function updateStartButton() {
     : 'Waiting for players...';
 }
 
-// Mode select buttons
-document.querySelectorAll('.mode-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedMode = btn.dataset.mode;
-  });
-});
-
 // Init music helper
 function initMusic() {
   if (!music) {
@@ -409,11 +399,7 @@ newGameBtn.addEventListener('click', () => {
 startBtn.addEventListener('click', () => {
   if (startBtn.disabled) return;
   initMusic(); // safety net
-  const settings = {};
-  if (selectedMode === MODE.RACE) {
-    settings.lineGoal = 40;
-  }
-  send(MSG.START_GAME, { mode: selectedMode, settings });
+  send(MSG.START_GAME);
 });
 
 // --- Results UI ---

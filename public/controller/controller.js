@@ -91,7 +91,7 @@
     gain.connect(ctx.destination);
     osc.frequency.value = 150;
     osc.type = 'sine';
-    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+    gain.gain.setValueAtTime(1.0, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.04);
@@ -109,7 +109,7 @@
     osc.type = 'square';
     osc.frequency.setValueAtTime(baseFreq, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, ctx.currentTime + duration);
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + duration);
@@ -127,7 +127,7 @@
     osc.type = 'sine';
     osc.frequency.setValueAtTime(120, t);
     osc.frequency.exponentialRampToValueAtTime(30, t + 0.1);
-    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.setValueAtTime(0.9, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
     osc.start(t);
     osc.stop(t + 0.1);
@@ -140,7 +140,7 @@
     noise.buffer = buf;
     noise.connect(nGain);
     nGain.connect(ctx.destination);
-    nGain.gain.setValueAtTime(0.12, t);
+    nGain.gain.setValueAtTime(0.36, t);
     nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
     noise.start(t);
   }
@@ -156,7 +156,7 @@
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(500, t);
     osc.frequency.exponentialRampToValueAtTime(250, t + 0.08);
-    gain.gain.setValueAtTime(0.2, t);
+    gain.gain.setValueAtTime(0.6, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
     osc.start(t);
     osc.stop(t + 0.08);
@@ -684,7 +684,7 @@
   // Start button (host only)
   startBtn.addEventListener('click', function () {
     if (!isHost || startBtn.disabled) return;
-    send(MSG.START_GAME, { mode: MODE.COMPETITIVE });
+    send(MSG.START_GAME);
   });
 
   // Play Again button (host only, on gameover screen)

@@ -242,7 +242,7 @@ async function handleNewConnection(ws, msg) {
 function handleDisplayMessage(room, msg) {
   switch (msg.type) {
     case MSG.START_GAME:
-      room.startGame(msg.mode, msg.settings);
+      room.startGame();
       break;
     case MSG.RETURN_TO_LOBBY:
       room.returnToLobby();
@@ -267,7 +267,7 @@ function handleControllerMessage(room, playerId, msg) {
       break;
     case MSG.START_GAME:
       if (playerId === room.hostId) {
-        room.startGame(msg.mode, msg.settings);
+        room.startGame();
       }
       break;
     case MSG.PLAY_AGAIN:
