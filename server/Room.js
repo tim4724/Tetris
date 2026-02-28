@@ -21,7 +21,6 @@ class Room {
     this.state = ROOM_STATE.LOBBY;
     this.players = new Map(); // id -> { ws, name, color, reconnectToken, connected, graceTimer }
     this.game = null;
-    this.nextPlayerId = 1;
     this.countdownTimer = null;
     this.hostId = null;
 
@@ -43,18 +42,24 @@ class Room {
     return code;
   }
 
+  getNextPlayerId() {
+    for (let id = 1; id <= MAX_PLAYERS; id++) {
+      if (!this.players.has(id)) return id;
+    }
+    return null;
+  }
+
   addPlayer(ws, name) {
     if (this.state !== ROOM_STATE.LOBBY) {
       send(ws, MSG.ERROR, { message: 'Game already in progress' });
       return null;
     }
 
-    if (this.players.size >= MAX_PLAYERS) {
+    const playerId = this.getNextPlayerId();
+    if (playerId === null) {
       send(ws, MSG.ERROR, { message: 'Room is full' });
       return null;
     }
-
-    const playerId = this.nextPlayerId++;
     const color = PLAYER_COLORS[(playerId - 1) % PLAYER_COLORS.length];
     const reconnectToken = generateToken();
     const isHost = this.hostId === null;
@@ -93,27 +98,26 @@ class Room {
       this.players.delete(playerId);
 
       if (playerId === this.hostId) {
-        // Host disconnected — cancel lobby for all remaining controllers
+        // Host disconnected — reset the session
         this.hostId = null;
         this.broadcastToControllers(MSG.ERROR, { code: 'HOST_DISCONNECTED', message: 'Host disconnected' });
-        // Close all remaining controller websockets
         for (const [, p] of this.players) {
           if (p.ws) {
             try { p.ws.close(); } catch (e) { /* ignore */ }
           }
         }
         this.players.clear();
+        this.sendToDisplay(MSG.ROOM_RESET);
       } else {
         // Non-host left — update lobby
         this.broadcastToControllers(MSG.LOBBY_UPDATE, {
           playerCount: this.players.size
         });
+        this.sendToDisplay(MSG.PLAYER_LEFT, {
+          playerId,
+          playerCount: this.players.size
+        });
       }
-
-      this.sendToDisplay(MSG.PLAYER_LEFT, {
-        playerId,
-        playerCount: this.players.size
-      });
     } else {
       // In game: mark disconnected, start grace timer
       player.connected = false;
@@ -142,6 +146,21 @@ class Room {
     }
 
     return true;
+  }
+
+  reconnectByToken(ws, token) {
+    for (const [id, player] of this.players) {
+      if (player.reconnectToken === token) {
+        player.ws = ws;
+        player.connected = true;
+        if (player.graceTimer) {
+          clearTimeout(player.graceTimer);
+          player.graceTimer = null;
+        }
+        return id;
+      }
+    }
+    return null;
   }
 
   async getQRUrl(joinUrl) {

@@ -198,11 +198,18 @@ async function handleNewConnection(ws, msg) {
       return;
     }
 
-    const success = room.reconnectPlayer(msg.playerId, ws, msg.reconnectToken);
-    if (success) {
-      clientInfo.set(ws, { roomCode: msg.roomCode, playerId: msg.playerId, type: 'controller' });
-      send(ws, MSG.JOINED, { playerId: msg.playerId, reconnected: true });
-      console.log(`Player ${msg.playerId} reconnected to room ${msg.roomCode}`);
+    const playerId = room.reconnectByToken(ws, msg.reconnectToken);
+    if (playerId !== null) {
+      const player = room.players.get(playerId);
+      clientInfo.set(ws, { roomCode: msg.roomCode, playerId, type: 'controller' });
+      send(ws, MSG.JOINED, {
+        playerId,
+        playerColor: player.color,
+        reconnected: true,
+        isHost: playerId === room.hostId,
+        playerCount: room.players.size
+      });
+      console.log(`Player ${playerId} reconnected to room ${msg.roomCode}`);
     } else {
       send(ws, MSG.ERROR, { message: 'Reconnection failed' });
     }

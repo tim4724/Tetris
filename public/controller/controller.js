@@ -26,9 +26,11 @@
   const roomCodeBox = document.getElementById('room-code-box');
   const roomCodeValue = document.getElementById('room-code-value');
   const playerCountEl = document.getElementById('player-count');
+  const playerIdentity = document.getElementById('player-identity');
   const startBtn = document.getElementById('start-btn');
   const statusText = document.getElementById('status-text');
   const statusDetail = document.getElementById('status-detail');
+  const rejoinBtn = document.getElementById('rejoin-btn');
   const playerNameEl = document.getElementById('player-name');
   const playerIndicator = document.getElementById('player-indicator');
   const scoreDisplay = document.getElementById('score-display');
@@ -123,7 +125,8 @@
   function attemptReconnect() {
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       statusText.textContent = 'Disconnected';
-      statusDetail.textContent = 'Could not reconnect. Refresh to try again.';
+      statusDetail.textContent = 'Could not reconnect.';
+      rejoinBtn.classList.remove('hidden');
       showScreen('waiting');
       return;
     }
@@ -180,6 +183,7 @@
     if (data.reconnectToken) {
       sessionStorage.setItem('reconnectToken_' + roomCode, data.reconnectToken);
     }
+    sessionStorage.setItem('playerId_' + roomCode, data.playerId);
 
     const name = PLAYER_NAMES[playerId - 1] || ('Player ' + playerId);
     playerNameEl.textContent = name;
@@ -190,7 +194,13 @@
     roomCodeBox.classList.remove('hidden');
     roomCodeValue.textContent = roomCode;
     playerCountEl.classList.remove('hidden');
+    rejoinBtn.classList.add('hidden');
     updatePlayerCount();
+
+    // Show player identity
+    playerIdentity.textContent = name;
+    playerIdentity.style.color = playerColor;
+    playerIdentity.classList.remove('hidden');
 
     if (isHost) {
       startBtn.classList.remove('hidden');
@@ -221,6 +231,14 @@
     startBtn.textContent = 'START (' + playerCount + (playerCount === 1 ? ' player)' : ' players)');
   }
 
+  function hideLobbyElements() {
+    lobbyTitle.classList.add('hidden');
+    roomCodeBox.classList.add('hidden');
+    playerCountEl.classList.add('hidden');
+    playerIdentity.classList.add('hidden');
+    startBtn.classList.add('hidden');
+  }
+
   function onGameStart() {
     // Best-effort start signal for mobile controllers.
     vibrate([15, 25, 20]);
@@ -230,13 +248,7 @@
     gameScreen.classList.remove('dead');
     hintHidden = false;
     removeCountdownOverlay();
-
-    // Hide lobby elements
-    lobbyTitle.classList.add('hidden');
-    roomCodeBox.classList.add('hidden');
-    playerCountEl.classList.add('hidden');
-    startBtn.classList.add('hidden');
-
+    hideLobbyElements();
     showScreen('game');
     initTouchInput();
   }
@@ -310,17 +322,19 @@
   function onError(data) {
     if (data.code === 'HOST_DISCONNECTED') {
       gameCancelled = true;
-      lobbyTitle.classList.add('hidden');
-      roomCodeBox.classList.add('hidden');
-      playerCountEl.classList.add('hidden');
-      startBtn.classList.add('hidden');
+      hideLobbyElements();
       statusText.textContent = 'Game Cancelled';
-      statusDetail.textContent = 'Host disconnected. Refresh to rejoin.';
+      statusDetail.textContent = 'Host disconnected.';
+      rejoinBtn.classList.remove('hidden');
       showScreen('waiting');
       return;
     }
+    hideLobbyElements();
     statusText.textContent = 'Error';
     statusDetail.textContent = data.message || 'Unknown error';
+    if (data.message === 'Reconnection failed') {
+      rejoinBtn.classList.remove('hidden');
+    }
     showScreen('waiting');
   }
 
@@ -358,6 +372,19 @@
       }
     });
   }
+
+  // Rejoin button
+  rejoinBtn.addEventListener('click', function () {
+    sessionStorage.removeItem('reconnectToken_' + roomCode);
+    sessionStorage.removeItem('playerId_' + roomCode);
+    gameCancelled = false;
+    reconnectAttempts = 0;
+    clearTimeout(reconnectTimer);
+    rejoinBtn.classList.add('hidden');
+    statusText.textContent = 'Connecting...';
+    statusDetail.textContent = '';
+    connect();
+  });
 
   // Start button (host only)
   startBtn.addEventListener('click', function () {

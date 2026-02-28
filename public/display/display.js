@@ -154,6 +154,9 @@ function handleMessage(msg) {
     case MSG.PLAYER_LEFT:
       onPlayerLeft(msg);
       break;
+    case MSG.ROOM_RESET:
+      onRoomReset();
+      break;
     case MSG.COUNTDOWN:
       onCountdown(msg);
       break;
@@ -199,6 +202,19 @@ function onPlayerLeft(msg) {
   playerOrder = playerOrder.filter(id => id !== msg.playerId);
   updatePlayerList();
   updateStartButton();
+}
+
+function onRoomReset() {
+  if (music) music.stop();
+  gameState = null;
+  boardRenderers = [];
+  uiRenderers = [];
+  playerIndexCounter = 0;
+  players.clear();
+  playerOrder = [];
+  updatePlayerList();
+  updateStartButton();
+  showScreen('lobby');
 }
 
 function onCountdown(msg) {
@@ -382,18 +398,8 @@ function renderResults(results) {
 
 // Back to lobby
 lobbyBtn.addEventListener('click', () => {
-  if (music) music.stop();
   send(MSG.RETURN_TO_LOBBY);
-  gameState = null;
-  boardRenderers = [];
-  uiRenderers = [];
-  playerIndexCounter = 0;
-  players.clear();
-  playerOrder = [];
-  updatePlayerList();
-  updateStartButton();
-  showScreen('lobby');
-  // Re-create the room
+  onRoomReset();
   send(MSG.CREATE_ROOM);
 });
 

@@ -27,6 +27,7 @@ const MSG = {
 
   // Server → Display
   ROOM_CREATED: 'room_created',
+  ROOM_RESET: 'room_reset',
   PLAYER_JOINED: 'player_joined',
   PLAYER_LEFT: 'player_left',
   GAME_STATE: 'game_state',
