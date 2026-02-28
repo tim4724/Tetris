@@ -430,7 +430,7 @@ html, body {
   box-shadow: 0 0 24px rgba(0, 255, 136, 0.4);
 }
 
-#exit-btn {
+#new-game-results-btn {
   padding: clamp(0.6rem, 1.2vh, 1.2rem) clamp(2rem, 4vw, 4rem);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -444,9 +444,9 @@ html, body {
   transition: all 0.2s ease;
 }
 
-#exit-btn:hover {
-  border-color: rgba(255, 68, 68, 0.5);
-  color: var(--danger);
+#new-game-results-btn:hover {
+  border-color: rgba(0, 200, 255, 0.5);
+  color: rgba(0, 200, 255, 0.9);
 }
 
 /* ============================================

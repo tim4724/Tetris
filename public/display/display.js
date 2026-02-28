@@ -31,7 +31,7 @@ const startBtn = document.getElementById('start-btn');
 const countdownOverlay = document.getElementById('countdown-overlay');
 const resultsList = document.getElementById('results-list');
 const playAgainBtn = document.getElementById('play-again-btn');
-const exitBtn = document.getElementById('exit-btn');
+const newGameResultsBtn = document.getElementById('new-game-results-btn');
 
 // --- Screen Management ---
 function showScreen(name) {
@@ -195,6 +195,13 @@ function handleMessage(msg) {
       break;
     case MSG.PLAYER_RECONNECTED:
       onPlayerReconnected(msg);
+      break;
+    case MSG.RETURN_TO_LOBBY:
+      if (music) music.stop();
+      gameState = null;
+      disconnectedQRs.clear();
+      showScreen('lobby');
+      updateStartButton();
       break;
   }
 }
@@ -445,26 +452,12 @@ function renderResults(results) {
 // Play Again — restart with same players
 playAgainBtn.addEventListener('click', () => {
   initMusic();
-  gameState = null; // clear old boards so countdown shows clean canvas
   send(MSG.PLAY_AGAIN);
 });
 
-// Exit — return to welcome screen
-exitBtn.addEventListener('click', () => {
-  if (music) music.stop();
-  gameState = null;
-  boardRenderers = [];
-  uiRenderers = [];
-  playerIndexCounter = 0;
-  players.clear();
-  playerOrder = [];
-  disconnectedQRs.clear();
-  if (ws) {
-    ws.onclose = null;
-    ws.close();
-    ws = null;
-  }
-  showScreen('welcome');
+// New Game — return to lobby so new players can join
+newGameResultsBtn.addEventListener('click', () => {
+  send(MSG.RETURN_TO_LOBBY);
 });
 
 // --- Render Loop ---

@@ -358,6 +358,7 @@ class Room {
       this.game = null;
     }
     this.state = ROOM_STATE.LOBBY;
+    this.broadcast(MSG.RETURN_TO_LOBBY, { playerCount: this.players.size });
   }
 
   getConnectedCount() {

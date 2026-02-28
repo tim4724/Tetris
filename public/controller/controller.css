@@ -614,9 +614,14 @@ html, body {
   letter-spacing: 0.02em;
 }
 
-#play-again-btn {
+#gameover-buttons {
+  display: flex;
+  gap: 12px;
   margin-top: auto;
-  padding: 14px 48px;
+}
+
+#play-again-btn {
+  padding: 14px 28px;
   border: none;
   border-radius: 10px;
   background: linear-gradient(180deg, #00ff88 0%, #00dd77 100%);
@@ -634,6 +639,27 @@ html, body {
   transform: scale(0.95);
   animation: none;
   box-shadow: 0 0 12px rgba(0, 255, 136, 0.35);
+}
+
+#new-game-btn {
+  padding: 14px 28px;
+  border: 1px solid rgba(30, 30, 68, 0.8);
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(160, 160, 200, 0.7);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  animation: resultsBtnIn 0.5s 0.7s ease-out both;
+}
+
+#new-game-btn:active {
+  border-color: rgba(0, 200, 255, 0.5);
+  color: rgba(0, 200, 255, 0.9);
+  transform: scale(0.95);
 }
 
 #gameover-status {

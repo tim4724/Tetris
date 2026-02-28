@@ -275,6 +275,11 @@ function handleControllerMessage(room, playerId, msg) {
         room.playAgain();
       }
       break;
+    case MSG.RETURN_TO_LOBBY:
+      if (playerId === room.hostId) {
+        room.returnToLobby();
+      }
+      break;
   }
 }
 

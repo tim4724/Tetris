@@ -41,7 +41,9 @@
   const linesProgressFill = document.getElementById('lines-progress-fill');
   const gameoverTitle = document.getElementById('gameover-title');
   const resultsList = document.getElementById('results-list');
+  const gameoverButtons = document.getElementById('gameover-buttons');
   const playAgainBtn = document.getElementById('play-again-btn');
+  const newGameBtn = document.getElementById('new-game-btn');
   const gameoverStatus = document.getElementById('gameover-status');
 
   // Screen management
@@ -66,22 +68,118 @@
     navigator.vibrate(pattern);
   }
 
-  // Prime the Vibration API.  On Android Chrome the first-ever vibrate()
-  // call in a page silently fails; vibration only works starting from the
-  // *next* user gesture.  We therefore need at least one completed touch
-  // interaction that calls vibrate() BEFORE the game's first gesture.
-  // The waiting screen prompts the user to tap, which primes the API.
-  let vibrationPrimed = false;
+  // --- Web Audio sound effects (works on iOS where vibrate doesn't) ---
+  let audioCtx = null;
+  let lastLines = 0;
 
-  function primeVibration() {
-    if (vibrationPrimed) return;
-    vibrationPrimed = true;
+  function getAudioCtx() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    return audioCtx;
+  }
+
+  // Short tactile tick — supplements vibrate for haptic-like feedback
+  function playTick() {
+    var ctx = getAudioCtx();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 150;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.04);
+  }
+
+  // Line clear chime — pitch and duration scale with lines cleared
+  function playLineClear(count) {
+    var ctx = getAudioCtx();
+    var baseFreq = count >= 4 ? 600 : count >= 3 ? 500 : count >= 2 ? 440 : 380;
+    var duration = count >= 4 ? 0.25 : 0.15;
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(baseFreq, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, ctx.currentTime + duration);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  }
+
+  // Hard drop — punchy impact with noise burst
+  function playDrop() {
+    var ctx = getAudioCtx();
+    var t = ctx.currentTime;
+    // Low thud
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(120, t);
+    osc.frequency.exponentialRampToValueAtTime(30, t + 0.1);
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    osc.start(t);
+    osc.stop(t + 0.1);
+    // Noise snap layer
+    var buf = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+    var data = buf.getChannelData(0);
+    for (var i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    var noise = ctx.createBufferSource();
+    var nGain = ctx.createGain();
+    noise.buffer = buf;
+    noise.connect(nGain);
+    nGain.connect(ctx.destination);
+    nGain.gain.setValueAtTime(0.12, t);
+    nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+    noise.start(t);
+  }
+
+  // Hold — quick two-tone swoosh (high→low)
+  function playHold() {
+    var ctx = getAudioCtx();
+    var t = ctx.currentTime;
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(500, t);
+    osc.frequency.exponentialRampToValueAtTime(250, t + 0.08);
+    gain.gain.setValueAtTime(0.2, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    osc.start(t);
+    osc.stop(t + 0.08);
+  }
+
+  // Prime audio context + vibration on first user interaction (required by iOS)
+  let audioPrimed = false;
+
+  function primeAudio() {
+    if (audioPrimed) return;
+    audioPrimed = true;
     vibrate(1);
+    var ctx = getAudioCtx();
+    var buf = ctx.createBuffer(1, 1, ctx.sampleRate);
+    var src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
   }
 
   // Capture-phase listener so it fires before any other pointer handler.
   document.addEventListener('pointerdown', function onFirstPointer() {
-    primeVibration();
+    primeAudio();
     document.removeEventListener('pointerdown', onFirstPointer, true);
   }, { capture: true, passive: true });
 
@@ -166,10 +264,15 @@
         onPlayerState(data);
         break;
       case MSG.GAME_OVER:
-        onGameOver(data);
+        // Player KO'd mid-game — wait for GAME_END for results
         break;
       case MSG.GAME_END:
         onGameEnd(data);
+        break;
+      case MSG.RETURN_TO_LOBBY:
+        playerCount = data.playerCount || playerCount;
+        gameScreen.classList.remove('dead');
+        showLobbyUI();
         break;
       case MSG.ROOM_RESET:
         gameCancelled = true;
@@ -216,32 +319,7 @@
       return;
     }
 
-    // Show lobby UI
-    lobbyTitle.classList.remove('hidden');
-    roomCodeBox.classList.remove('hidden');
-    roomCodeValue.textContent = roomCode;
-    playerCountEl.classList.remove('hidden');
-    rejoinBtn.classList.add('hidden');
-    updatePlayerCount();
-
-    // Show player identity card
-    playerIdentity.style.setProperty('--id-color', playerColor);
-    playerIdentityName.textContent = name;
-    playerIdentity.classList.remove('hidden');
-
-    if (isHost) {
-      startBtn.classList.remove('hidden');
-      startBtn.disabled = false;
-      updateStartButton();
-      statusText.textContent = '';
-      statusDetail.textContent = '';
-    } else {
-      startBtn.classList.add('hidden');
-      statusText.textContent = 'Waiting for host to start...';
-      statusDetail.textContent = '';
-    }
-
-    showScreen('waiting');
+    showLobbyUI();
   }
 
   function onLobbyUpdate(data) {
@@ -266,10 +344,40 @@
     startBtn.classList.add('hidden');
   }
 
+  function showLobbyUI() {
+    lobbyTitle.classList.remove('hidden');
+    roomCodeBox.classList.remove('hidden');
+    roomCodeValue.textContent = roomCode;
+    playerCountEl.classList.remove('hidden');
+    rejoinBtn.classList.add('hidden');
+    updatePlayerCount();
+
+    var name = PLAYER_NAMES[playerId - 1] || ('Player ' + playerId);
+    playerIdentity.style.setProperty('--id-color', playerColor);
+    playerIdentityName.textContent = name;
+    playerIdentity.classList.remove('hidden');
+
+    if (isHost) {
+      startBtn.classList.remove('hidden');
+      startBtn.disabled = false;
+      updateStartButton();
+      statusText.textContent = '';
+      statusDetail.textContent = '';
+    } else {
+      startBtn.classList.add('hidden');
+      statusText.textContent = 'Waiting for host to start...';
+      statusDetail.textContent = '';
+    }
+
+    showScreen('waiting');
+  }
+
   function onGameStart() {
     // Best-effort start signal for mobile controllers.
     vibrate([15, 25, 20]);
+    playTick();
     inputSeq = 0;
+    lastLines = 0;
     scoreDisplay.textContent = '0';
     levelDisplay.textContent = 'LVL 1';
     linesDisplay.textContent = '0 lines';
@@ -316,6 +424,10 @@
       levelDisplay.textContent = 'LVL ' + data.level;
     }
     if (data.lines !== undefined) {
+      if (data.lines > lastLines) {
+        playLineClear(data.lines - lastLines);
+      }
+      lastLines = data.lines;
       linesDisplay.textContent = data.lines + (data.lines === 1 ? ' line' : ' lines');
       linesProgressFill.style.width = ((data.lines % 10) / 10 * 100) + '%';
     }
@@ -323,10 +435,6 @@
       gameScreen.classList.add('dead');
       showKoOverlay();
     }
-  }
-
-  function onGameOver(data) {
-    // Player was KO'd mid-game — just mark as dead, wait for GAME_END for results
   }
 
   function onGameEnd(data) {
@@ -338,8 +446,8 @@
     resultsList.innerHTML = '';
     gameoverTitle.textContent = 'RESULTS';
 
-    // Show play again button for host, status text for others
-    playAgainBtn.classList.toggle('hidden', !isHost);
+    // Show buttons for host, status text for others
+    gameoverButtons.classList.toggle('hidden', !isHost);
     gameoverStatus.textContent = isHost ? '' : 'Waiting for host...';
 
     // Set winner glow color on the screen
@@ -512,25 +620,32 @@
     touchArea.addEventListener('pointerdown', coordTracker, { passive: true });
 
     touchInput = new TouchInput(touchArea, function (action, data) {
-      // Gesture feedback
+      // Gesture feedback — audio + visual
       if (action === 'rotate_cw') {
+        playTick();
         createFeedback('ripple', lastTouchX, lastTouchY);
       } else if (action === 'left' || action === 'right') {
+        playTick();
         // Flash the horizontal buildup wash on ratchet step
         if (buildupEl) {
           flashBuildup();
         } else {
           createWash(action === 'left' ? 'right' : 'left');
         }
-      } else if (action === 'hard_drop' || action === 'hold') {
-        // Flick gestures — clear any stale buildup, use fresh directional wash
+      } else if (action === 'hard_drop') {
+        playDrop();
         removeBuildupEl();
-        createWash(action === 'hard_drop' ? 'up' : 'down');
+        createWash('up');
+      } else if (action === 'hold') {
+        playHold();
+        removeBuildupEl();
+        createWash('down');
       }
 
       if (action === 'soft_drop_start') {
         if (!softDropActive) {
           softDropActive = true;
+          playTick();
           removeBuildupEl();
           softDropWash = document.createElement('div');
           softDropWash.className = 'feedback-wash feedback-wash-up feedback-wash-hold';
@@ -576,6 +691,12 @@
   playAgainBtn.addEventListener('click', function () {
     if (!isHost) return;
     send(MSG.PLAY_AGAIN);
+  });
+
+  // New Game button (host only, returns to lobby)
+  newGameBtn.addEventListener('click', function () {
+    if (!isHost) return;
+    send(MSG.RETURN_TO_LOBBY);
   });
 
   // When the phone locks, the browser freezes the page and the WebSocket
